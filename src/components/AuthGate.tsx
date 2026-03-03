@@ -42,13 +42,13 @@ export function AuthGate({ loading }: AuthGateProps) {
 
         <form onSubmit={handleSignIn} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
             <input
               type="text"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="staff@shop.com"
+              placeholder="Enter your username"
               autoComplete="username"
             />
           </div>
@@ -59,7 +59,7 @@ export function AuthGate({ loading }: AuthGateProps) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="••••••••"
+              placeholder="Enter your password"
               autoComplete="current-password"
             />
           </div>
