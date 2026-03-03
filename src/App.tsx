@@ -159,7 +159,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                 <img
-                  src="/cohortix/Logo+Name Lightheme.png"
+                  src="/public/cohortix/Logo+Name Lightheme.png"
                   alt="Cohortix logo"
                   className="h-8 w-auto object-contain"
                 />
@@ -167,12 +167,12 @@ export default function App() {
               <h1 className="text-xl font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
             </div>
             <div className="flex items-center gap-2">
-            <nav className="flex space-x-2">
-              <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
-              <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
-              <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
-              <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
-            </nav>
+              <nav className="flex space-x-2">
+                <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
+                <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
+                <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
+                <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+              </nav>
               <button
                 type="button"
                 onClick={() => { void handleSignOut(); }}
@@ -256,7 +256,7 @@ export default function App() {
       <footer className="hidden md:block bg-white border-t border-slate-200 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
-            src="/cohortix/Logo+Name Lightheme.png"
+            src="/public/cohortix/Logo+Name Lightheme.png"
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />

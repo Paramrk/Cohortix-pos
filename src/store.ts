@@ -23,6 +23,45 @@ function toSafeNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function parseOrderItems(value: unknown): Order['items'] {
+  if (Array.isArray(value)) {
+    return value as Order['items'];
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        return parsed as Order['items'];
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function normalizeOrderStatus(value: unknown): Order['status'] {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'completed' || normalized === 'complete' || normalized === 'done') {
+    return 'completed';
+  }
+  return 'pending';
+}
+
+function normalizePaymentMethod(value: unknown): Order['paymentMethod'] {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'upi') return 'upi';
+  if (normalized === 'pay_later') return 'pay_later';
+  return 'cash';
+}
+
+function normalizePaymentStatus(value: unknown): Order['paymentStatus'] {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return normalized === 'paid' ? 'paid' : 'unpaid';
+}
+
 function getBusinessDateString(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata',
@@ -103,11 +142,11 @@ function toOrder(row: Record<string, unknown>): Order {
     orderNumber: toSafeNumber(row.order_number),
     customerName: String(row.customer_name ?? 'Guest'),
     orderInstructions: rawInstructions || undefined,
-    items: (row.items as Order['items']) ?? [],
+    items: parseOrderItems(row.items),
     total: toSafeNumber(row.total),
-    status: (row.status as Order['status']) ?? 'pending',
-    paymentMethod: (row.payment_method as Order['paymentMethod']) ?? 'cash',
-    paymentStatus: (row.payment_status as Order['paymentStatus']) ?? 'unpaid',
+    status: normalizeOrderStatus(row.status),
+    paymentMethod: normalizePaymentMethod(row.payment_method),
+    paymentStatus: normalizePaymentStatus(row.payment_status),
     timestamp,
     businessDate,
     source,
