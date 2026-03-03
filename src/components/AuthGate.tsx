@@ -44,7 +44,7 @@ export function AuthGate({ loading }: AuthGateProps) {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
