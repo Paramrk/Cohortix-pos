@@ -22,6 +22,7 @@ export interface Order {
   id: string;
   orderNumber: number;
   customerName: string;
+  orderInstructions?: string;
   items: CartItem[];
   total: number;
   status: 'pending' | 'completed';
@@ -35,4 +36,9 @@ export interface Expense {
   description: string;
   amount: number;
   timestamp: number;
+}
+
+export interface PricingRule {
+  discountPercent: number;
+  bogoEnabled: boolean;
 }

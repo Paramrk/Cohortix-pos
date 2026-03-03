@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+:root {
+  --mobile-nav-height: 74px;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
@@ -9,9 +13,28 @@
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom);
   }
+
+  .mobile-bottom-offset {
+    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  .mobile-floating-offset {
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  .mobile-nav-height {
+    min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 body {
   font-family: 'Inter', sans-serif;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
 }

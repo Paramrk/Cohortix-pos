@@ -49,22 +49,22 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData }: Dashb
   };
 
   const StatCard = ({ title, amount, icon: Icon, colorClass, subtitle }: any) => (
-    <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-start justify-between">
-      <div>
+    <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 flex items-start justify-between gap-3">
+      <div className="min-w-0">
         <p className="text-slate-500 font-medium text-sm mb-1">{title}</p>
-        <h3 className={`text-3xl font-bold ${colorClass}`}>₹{amount}</h3>
-        {subtitle && <p className="text-xs text-slate-400 mt-2">{subtitle}</p>}
+        <h3 className={`text-2xl sm:text-3xl font-bold ${colorClass}`}>₹{amount}</h3>
+        {subtitle && <p className="text-xs text-slate-400 mt-2 break-words leading-relaxed">{subtitle}</p>}
       </div>
-      <div className={`p-3 rounded-xl ${colorClass.replace('text-', 'bg-').replace('600', '100')}`}>
+      <div className={`p-3 rounded-xl shrink-0 ${colorClass.replace('text-', 'bg-').replace('600', '100')}`}>
         <Icon className={`w-6 h-6 ${colorClass}`} />
       </div>
     </div>
   );
 
   return (
-    <div className="pb-20 md:pb-0 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-slate-800">Today's Dashboard</h2>
+    <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Today's Dashboard</h2>
         <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
           {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
         </span>
@@ -96,25 +96,25 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData }: Dashb
       </div>
 
       {/* Monthly Preview */}
-      <div className="bg-slate-800 rounded-2xl p-6 mb-8 text-white shadow-lg">
+      <div className="bg-slate-800 rounded-2xl p-4 sm:p-6 mb-8 text-white shadow-lg">
         <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-100">
           <CalendarDays className="w-5 h-5 text-indigo-400" />
           Monthly Finance Preview ({now.toLocaleString('default', { month: 'long' })})
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
             <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Total Sales</p>
             <p className="text-xl font-bold">₹{monthlyTotalSales}</p>
           </div>
-          <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
+          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
             <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Collected</p>
             <p className="text-xl font-bold text-emerald-400">₹{monthlyCollected}</p>
           </div>
-          <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
+          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
             <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Pending</p>
             <p className="text-xl font-bold text-rose-400">₹{monthlyPending}</p>
           </div>
-          <div className="bg-slate-700/50 p-4 rounded-xl border border-slate-600">
+          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
             <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Net Profit</p>
             <p className={`text-xl font-bold ${monthlyNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
               ₹{monthlyNetProfit}
@@ -204,3 +204,4 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData }: Dashb
     </div>
   );
 }
+

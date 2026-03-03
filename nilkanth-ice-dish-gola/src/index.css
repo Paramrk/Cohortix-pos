@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
+:root {
+  --mobile-cart-cta-height: 68px;
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
@@ -10,6 +14,69 @@
   body {
     @apply bg-stone-50 text-stone-900;
   }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes cartToastInOut {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.99);
+  }
+}
+
+@keyframes menuAddPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes confirmationEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes confirmationIconFloat {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes confirmationIconPing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+@keyframes confirmationProgress {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
 }
 
 .markdown-body {
@@ -22,4 +89,50 @@
 
 .markdown-body p {
   @apply mb-4;
+}
+
+@layer utilities {
+  .cart-toast-inout {
+    animation: cartToastInOut 2s ease-in-out forwards;
+  }
+
+  .menu-add-pop {
+    animation: menuAddPop 220ms ease-out;
+  }
+
+  .confirmation-enter {
+    animation: confirmationEnter 360ms ease-out both;
+  }
+
+  .confirmation-icon-wrap {
+    position: relative;
+  }
+
+  .confirmation-icon-ping {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    background: rgba(16, 185, 129, 0.25);
+    animation: confirmationIconPing 1.8s ease-out infinite;
+  }
+
+  .confirmation-icon-float {
+    animation: confirmationIconFloat 1.9s ease-in-out infinite;
+  }
+
+  .confirmation-progress {
+    animation: confirmationProgress 2s ease-in-out infinite;
+  }
+
+  .mobile-cta-offset {
+    padding-bottom: calc(var(--mobile-cart-cta-height) + env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  .mobile-fab-offset {
+    bottom: calc(env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

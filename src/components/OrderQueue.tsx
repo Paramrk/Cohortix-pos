@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Clock, User, QrCode } from 'lucide-react';
 import { Order } from '../types';
 
 interface OrderQueueProps {
   orders: Order[];
+  ordersRealtimeConnected: boolean;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
+  onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
 }
 
 interface OrderCardProps {
@@ -16,10 +18,18 @@ interface OrderCardProps {
   setSettlingOrderId: (id: string | null) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
+  onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
 }
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getItemVariant(item: Record<string, unknown>): string | null {
+  if (typeof item.variant === 'string' && item.variant.trim()) return item.variant;
+  if (typeof item.variantName === 'string' && item.variantName.trim()) return item.variantName;
+  if (typeof item.variant_name === 'string' && item.variant_name.trim()) return item.variant_name;
+  return null;
 }
 
 function OrderCard({
@@ -29,56 +39,87 @@ function OrderCard({
   setSettlingOrderId,
   onUpdateStatus,
   onUpdatePayment,
+  onClearPayment,
 }: OrderCardProps) {
+  const [showClearOptions, setShowClearOptions] = useState(false);
+  const [pendingDueAmount, setPendingDueAmount] = useState(String(order.total));
+
+  useEffect(() => {
+    setPendingDueAmount(String(order.total));
+  }, [order.total]);
+
+  const isUnpaid = order.paymentStatus !== 'paid';
+
+  const handleClearPayment = () => {
+    const parsedAmount = Number(pendingDueAmount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      onClearPayment(order.id);
+      setShowClearOptions(false);
+      return;
+    }
+    onClearPayment(order.id, parsedAmount);
+    setShowClearOptions(false);
+  };
+
   return (
     <div className={`bg-white rounded-xl shadow-sm border p-4 ${isPending ? 'border-orange-200' : 'border-emerald-200 opacity-75'}`}>
-      <div className="flex justify-between items-start mb-3">
-        <div>
+      <div className="flex justify-between items-start gap-3 mb-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-lg font-bold ${isPending ? 'text-orange-600' : 'text-emerald-600'}`}>
               #{order.orderNumber}
             </span>
-            <span className="text-sm text-slate-500 flex items-center gap-1">
+            <span className="text-xs sm:text-sm text-slate-500 flex items-center gap-1 shrink-0">
               <Clock className="w-3 h-3" /> {formatTime(order.timestamp)}
             </span>
           </div>
-          <div className="text-slate-700 font-medium flex items-center gap-1 mt-1">
+          <div className="text-slate-700 font-medium flex items-center gap-1 mt-1 break-words">
             <User className="w-4 h-4 text-slate-400" />
             {order.customerName}
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <div className="font-bold text-slate-800">₹{order.total}</div>
           <div
-            className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded inline-block ${order.paymentStatus === 'unpaid'
+            className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded inline-block ${isUnpaid
               ? 'bg-rose-100 text-rose-700'
               : 'bg-slate-100 text-slate-500'
               }`}
           >
-            {order.paymentStatus === 'unpaid' ? 'UNPAID' : order.paymentMethod}
+            {isUnpaid ? 'UNPAID' : order.paymentMethod}
           </div>
         </div>
       </div>
 
+      {order.orderInstructions && (
+        <div className="mb-3 p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
+          <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Instructions</span>
+          {order.orderInstructions}
+        </div>
+      )}
+
       <div className="bg-slate-50 rounded-lg p-3 mb-4 space-y-2 border border-slate-100">
-        {order.items.map((item, idx) => (
-          <div key={idx} className="flex justify-between text-sm items-center">
-            <span className="text-slate-700 flex items-center gap-2">
-              <span className="font-bold text-slate-900 bg-white border border-slate-200 w-6 h-6 flex items-center justify-center rounded-md">
-                {item.quantity}
-              </span>
-              <span className="font-medium">{item.name}</span>
-              {item.variant && (
-                <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
-                  {item.variant}
+        {order.items.map((item, idx) => {
+          const variant = getItemVariant(item as unknown as Record<string, unknown>);
+          return (
+            <div key={idx} className="flex justify-between text-sm items-start gap-2">
+              <span className="text-slate-700 flex items-start gap-2 min-w-0 flex-1">
+                <span className="font-bold text-slate-900 bg-white border border-slate-200 w-6 h-6 flex items-center justify-center rounded-md">
+                  {item.quantity}
                 </span>
-              )}
-            </span>
-          </div>
-        ))}
+                <span className="font-medium break-words">{item.name}</span>
+                {variant && (
+                  <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
+                    {variant}
+                  </span>
+                )}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
-      {(order.paymentStatus === 'unpaid' || !order.paymentStatus) && order.paymentMethod === 'pay_later' && (
+      {isUnpaid && (
         <div className="mb-4 pt-3 border-t border-slate-100">
           {settlingOrderId === order.id ? (
             <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -86,16 +127,19 @@ function OrderCard({
                 <QrCode className="w-24 h-24 text-slate-800" />
               </div>
               <p className="text-center text-xs font-medium text-slate-500">Scan to pay ₹{order.total}</p>
-              <div className="flex gap-2">
+              <p className="text-center text-[11px] text-slate-500">
+                Select received method to mark payment as paid
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => { onUpdatePayment(order.id, 'cash'); setSettlingOrderId(null); }}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
+                  className="flex-1 min-h-11 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
                   Cash Received
                 </button>
                 <button
                   onClick={() => { onUpdatePayment(order.id, 'upi'); setSettlingOrderId(null); }}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
+                  className="flex-1 min-h-11 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
                   UPI Received
                 </button>
@@ -110,7 +154,7 @@ function OrderCard({
           ) : (
             <button
               onClick={() => setSettlingOrderId(order.id)}
-              className="w-full bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
             >
               Settle Payment (₹{order.total})
             </button>
@@ -118,10 +162,49 @@ function OrderCard({
         </div>
       )}
 
+      <div className="mb-4 pt-3 border-t border-slate-100">
+        {showClearOptions ? (
+          <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+            <label className="block text-xs font-bold uppercase tracking-wide text-amber-800">
+              Set due amount before clear
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={pendingDueAmount}
+              onChange={(e) => setPendingDueAmount(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+              placeholder="Enter due amount"
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={handleClearPayment}
+                className="w-full min-h-11 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
+              >
+                Clear With Amount
+              </button>
+              <button
+                onClick={() => setShowClearOptions(false)}
+                className="w-full min-h-11 bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowClearOptions(true)}
+            className="w-full min-h-11 bg-amber-100 text-amber-800 hover:bg-amber-200 py-2.5 rounded-xl font-bold text-sm transition-colors"
+          >
+            {isUnpaid ? 'Adjust Due Amount' : 'Clear / Adjust Payment'}
+          </button>
+        )}
+      </div>
+
       {isPending ? (
         <button
           onClick={() => onUpdateStatus(order.id, 'completed')}
-          className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-sm"
+          className="w-full min-h-12 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-sm"
         >
           <CheckCircle2 className="w-5 h-5" />
           Mark as Done
@@ -129,7 +212,7 @@ function OrderCard({
       ) : (
         <button
           onClick={() => onUpdateStatus(order.id, 'pending')}
-          className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition-colors"
+          className="w-full min-h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition-colors"
         >
           Undo (Move to Pending)
         </button>
@@ -138,8 +221,15 @@ function OrderCard({
   );
 }
 
-export function OrderQueue({ orders, onUpdateStatus, onUpdatePayment }: OrderQueueProps) {
+export function OrderQueue({
+  orders,
+  ordersRealtimeConnected,
+  onUpdateStatus,
+  onUpdatePayment,
+  onClearPayment,
+}: OrderQueueProps) {
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
+  const [mobileSection, setMobileSection] = useState<'pending' | 'completed'>('pending');
 
   const pendingOrders = orders
     .filter((o) => o.status === 'pending')
@@ -150,11 +240,50 @@ export function OrderQueue({ orders, onUpdateStatus, onUpdatePayment }: OrderQue
     .slice(0, 10);
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-full pb-20 md:pb-0">
+    <div className="mobile-bottom-offset md:pb-0">
+      <div className="mb-4 flex items-center justify-between">
+        <span
+          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${
+            ordersRealtimeConnected
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              : 'bg-amber-50 text-amber-700 border-amber-200'
+          }`}
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+            }`}
+          />
+          {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
+        </span>
+      </div>
+
+      <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-2 gap-1">
+        <button
+          onClick={() => setMobileSection('pending')}
+          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'pending'
+            ? 'bg-orange-100 text-orange-700'
+            : 'text-slate-500'
+            }`}
+        >
+          Preparing ({pendingOrders.length})
+        </button>
+        <button
+          onClick={() => setMobileSection('completed')}
+          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'completed'
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'text-slate-500'
+            }`}
+        >
+          Completed ({completedOrders.length})
+        </button>
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-6 h-full items-start">
       {/* Pending Orders */}
-      <div className="flex-1">
+      <div className={`flex-1 ${mobileSection === 'pending' ? 'block' : 'hidden'} md:block`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></span>
             Preparing ({pendingOrders.length})
           </h2>
@@ -175,6 +304,7 @@ export function OrderQueue({ orders, onUpdateStatus, onUpdatePayment }: OrderQue
                 setSettlingOrderId={setSettlingOrderId}
                 onUpdateStatus={onUpdateStatus}
                 onUpdatePayment={onUpdatePayment}
+                onClearPayment={onClearPayment}
               />
             ))
           )}
@@ -182,8 +312,8 @@ export function OrderQueue({ orders, onUpdateStatus, onUpdatePayment }: OrderQue
       </div>
 
       {/* Completed Orders */}
-      <div className="flex-1 md:max-w-md">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+      <div className={`flex-1 md:max-w-md ${mobileSection === 'completed' ? 'block' : 'hidden'} md:block`}>
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
           Recently Completed
         </h2>
@@ -202,11 +332,13 @@ export function OrderQueue({ orders, onUpdateStatus, onUpdatePayment }: OrderQue
                 setSettlingOrderId={setSettlingOrderId}
                 onUpdateStatus={onUpdateStatus}
                 onUpdatePayment={onUpdatePayment}
+                onClearPayment={onClearPayment}
               />
             ))
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

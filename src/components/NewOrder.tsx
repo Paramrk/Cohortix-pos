@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
-import { MenuItem, CartItem, Order, GolaVariant } from '../types';
+import { MenuItem, CartItem, Order, GolaVariant, PricingRule } from '../types';
 
 interface NewOrderProps {
   menuItems: MenuItem[];
   onPlaceOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => void | Promise<void>;
+  pricingRule: PricingRule;
 }
 
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
@@ -28,15 +29,15 @@ function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
       <button
         type="button"
         onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
-        className="p-1.5 text-slate-600 rounded-l-lg active:bg-slate-100"
+        className="h-11 w-11 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
       >
         <Minus className="w-4 h-4" />
       </button>
-      <span className="w-8 text-center text-sm font-bold text-slate-800">{quantity}</span>
+      <span className="w-9 text-center text-base font-bold text-slate-800">{quantity}</span>
       <button
         type="button"
         onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdd(); }}
-        className="p-1.5 text-slate-600 rounded-r-lg active:bg-slate-100"
+        className="h-11 w-11 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
       >
         <Plus className="w-4 h-4" />
       </button>
@@ -44,12 +45,35 @@ function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
   );
 }
 
-export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
+export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('');
+  const [orderInstructions, setOrderInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'pay_later'>('cash');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
+
+  useEffect(() => {
+    const bodyStyle = document.body.style;
+    const htmlStyle = document.documentElement.style;
+    const prevBodyOverflow = bodyStyle.overflow;
+    const prevHtmlOverflow = htmlStyle.overflow;
+
+    if (showMobileCart) {
+      bodyStyle.overflow = 'hidden';
+      htmlStyle.overflow = 'hidden';
+    }
+
+    return () => {
+      bodyStyle.overflow = prevBodyOverflow;
+      htmlStyle.overflow = prevHtmlOverflow;
+    };
+  }, [showMobileCart]);
+
+  const discountUnitPrice = (price: number) => {
+    if (pricingRule.discountPercent <= 0) return price;
+    return Math.max(0, Math.round(price * (100 - pricingRule.discountPercent) / 100));
+  };
 
   const getCartQuantity = (itemId: string, variant?: string) => {
     const item = cart.find((i) => i.id === itemId && i.variant === variant);
@@ -107,13 +131,21 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
     );
   }, []);
 
-  const total = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
+  const subtotalAfterBogo = cart.reduce((sum, item) => {
+    const chargedQty = pricingRule.bogoEnabled ? Math.ceil(item.quantity / 2) : item.quantity;
+    return sum + item.calculatedPrice * chargedQty;
+  }, 0);
+  const bogoSavings = subtotal - subtotalAfterBogo;
+  const percentDiscountAmount = Math.round((subtotalAfterBogo * pricingRule.discountPercent) / 100);
+  const total = Math.max(0, subtotalAfterBogo - percentDiscountAmount);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
     onPlaceOrder({
       customerName: customerName.trim() || 'Guest',
+      orderInstructions: orderInstructions.trim() || undefined,
       items: cart,
       total,
       status: 'pending',
@@ -122,6 +154,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
     });
     setCart([]);
     setCustomerName('');
+    setOrderInstructions('');
     setPaymentMethod('cash');
     setShowMobileCart(false);
   };
@@ -134,17 +167,19 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
       ? cartItemNames.join(', ')
       : `${cartItemNames.slice(0, 2).join(', ')} +${cartItemNames.length - 2} more`;
 
-  const CartContent = () => (
+  const CartContent = ({ showHeader = true }: { showHeader?: boolean } = {}) => (
     <>
-      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
-        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <ShoppingCart className="w-5 h-5 text-indigo-600" />
-          Current Order
-        </h2>
-        <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
-          {totalItems} items
-        </span>
-      </div>
+      {showHeader && (
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-indigo-600" />
+            Current Order
+          </h2>
+          <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
+            {totalItems} items
+          </span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {cart.length === 0 ? (
@@ -164,22 +199,29 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-slate-500 mt-0.5">₹{item.calculatedPrice} × {item.quantity}</div>
+                <div className="text-sm text-slate-500 mt-0.5">
+                  ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
+                  {pricingRule.bogoEnabled && item.quantity >= 2 && (
+                    <span className="ml-2 text-emerald-700 font-semibold">
+                      (BOGO charged {Math.ceil(item.quantity / 2)})
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
                   <button
                     type="button"
                     onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, -1); }}
-                    className="p-1.5 text-slate-600 rounded-l-lg active:bg-slate-100"
+                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                  <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
                   <button
                     type="button"
                     onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, 1); }}
-                    className="p-1.5 text-slate-600 rounded-r-lg active:bg-slate-100"
+                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -187,7 +229,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                 <button
                   type="button"
                   onPointerDown={(e) => { e.preventDefault(); removeFromCart(item.cartItemId); }}
-                  className="p-2 text-red-500 active:bg-red-50 rounded-lg"
+                  className="h-10 w-10 flex items-center justify-center text-red-500 active:bg-red-50 rounded-lg touch-manipulation"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -197,7 +239,22 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
         )}
       </div>
 
-      <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0">
+      <div className={`p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 ${showHeader ? '' : 'sticky bottom-0 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]'}`}>
+        {(pricingRule.bogoEnabled || pricingRule.discountPercent > 0) && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {pricingRule.bogoEnabled && (
+              <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+                Buy 1 Get 1 Active
+              </span>
+            )}
+            {pricingRule.discountPercent > 0 && (
+              <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                {pricingRule.discountPercent}% OFF Active
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="mb-3">
           <input
             type="text"
@@ -207,12 +264,22 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
           />
         </div>
+        <div className="mb-3">
+          <textarea
+            placeholder="Custom Instructions (Optional) - e.g. less syrup, no dry fruit"
+            value={orderInstructions}
+            onChange={(e) => setOrderInstructions(e.target.value)}
+            rows={2}
+            maxLength={220}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white resize-none"
+          />
+        </div>
 
         <div className="flex gap-2 mb-4">
           <button
             type="button"
             onClick={() => setPaymentMethod('cash')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'cash'
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'cash'
               ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
               }`}
@@ -222,7 +289,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
           <button
             type="button"
             onClick={() => setPaymentMethod('upi')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'upi'
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'upi'
               ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
               }`}
@@ -232,7 +299,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
           <button
             type="button"
             onClick={() => setPaymentMethod('pay_later')}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'pay_later'
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'pay_later'
               ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
               }`}
@@ -248,16 +315,34 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
           </div>
         )}
 
-        <div className="flex justify-between items-end mb-4 px-1">
-          <span className="text-slate-500 font-medium">Total Amount</span>
-          <span className="text-3xl font-bold text-slate-800">₹{total}</span>
+        <div className="mb-4 px-1 space-y-1.5">
+          <div className="flex justify-between text-sm text-slate-500">
+            <span>Subtotal</span>
+            <span>₹{subtotal}</span>
+          </div>
+          {pricingRule.bogoEnabled && (
+            <div className="flex justify-between text-sm text-emerald-700 font-semibold">
+              <span>BOGO Savings</span>
+              <span>-₹{bogoSavings}</span>
+            </div>
+          )}
+          {pricingRule.discountPercent > 0 && (
+            <div className="flex justify-between text-sm text-indigo-700 font-semibold">
+              <span>{pricingRule.discountPercent}% Discount</span>
+              <span>-₹{percentDiscountAmount}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-end pt-1">
+            <span className="text-slate-600 font-semibold">Total Amount</span>
+            <span className="text-3xl font-bold text-slate-800">₹{total}</span>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={handleCheckout}
           disabled={cart.length === 0}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98]"
+          className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
         >
           Place Order
         </button>
@@ -266,10 +351,22 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
   );
 
   return (
-    <div className="flex flex-col md:flex-row h-full gap-6 relative">
+    <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
       {/* Menu Section */}
-      <div className="flex-1 overflow-y-auto pr-2 pb-32 md:pb-0">
-        <h2 className="text-2xl font-bold mb-6 text-slate-800">Menu</h2>
+      <div className={`flex-1 ${cart.length > 0 && !showMobileCart ? 'pb-36' : 'pb-4'} md:pb-0`}>
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu</h2>
+          {pricingRule.bogoEnabled && (
+            <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+              Buy 1 Get 1
+            </span>
+          )}
+          {pricingRule.discountPercent > 0 && (
+            <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+              {pricingRule.discountPercent}% Off
+            </span>
+          )}
+        </div>
         <div className="space-y-8">
           {categories.map((category) => (
             <div key={category}>
@@ -291,8 +388,8 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                         >
                           <div>
                             <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-xs font-medium mt-0.5">
-                              {GOLA_VARIANTS.map(v => `${v}: ₹${item.golaVariantPrices?.[v] ?? item.price}`).join(' · ')}
+                            <div className="text-slate-500 text-xs font-medium mt-0.5 leading-tight break-words pr-2">
+                              {GOLA_VARIANTS.map(v => `${v}: ₹${discountUnitPrice(item.golaVariantPrices?.[v] ?? item.price)}`).join(' · ')}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -316,7 +413,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                                 <div key={v} className="flex justify-between items-center">
                                   <div>
                                     <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mb-0.5 ${GOLA_VARIANT_COLORS[v]}`}>{v}</span>
-                                    <span className="block text-xs font-medium text-slate-500">₹{price}</span>
+                                    <span className="block text-xs font-medium text-slate-500">₹{discountUnitPrice(price)}</span>
                                   </div>
                                   <QuantityControl
                                     quantity={qty}
@@ -346,7 +443,9 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                         >
                           <div>
                             <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-sm font-medium mt-0.5">₹{item.price} - ₹{item.dishPrice}</div>
+                            <div className="text-slate-500 text-sm font-medium mt-0.5">
+                              ₹{discountUnitPrice(item.price)} - ₹{item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}
+                            </div>
                           </div>
                           {totalQty > 0 && !isExpanded ? (
                             <div className="bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
@@ -364,7 +463,7 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                             <div className="flex justify-between items-center">
                               <div>
                                 <span className="block text-sm font-bold text-slate-700">Stick</span>
-                                <span className="text-xs font-medium text-slate-500">₹{item.price}</span>
+                                <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
                               </div>
                               <QuantityControl
                                 quantity={stickQty}
@@ -375,7 +474,9 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                             <div className="flex justify-between items-center">
                               <div>
                                 <span className="block text-sm font-bold text-slate-700">Dish</span>
-                                <span className="text-xs font-medium text-slate-500">₹{item.dishPrice}</span>
+                                <span className="text-xs font-medium text-slate-500">
+                                  {item.dishPrice ? `₹${discountUnitPrice(item.dishPrice)}` : '—'}
+                                </span>
                               </div>
                               <QuantityControl
                                 quantity={dishQty}
@@ -395,14 +496,14 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
                     <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
                       <div>
                         <div className="font-bold text-slate-800">{item.name}</div>
-                        <div className="text-slate-500 text-sm font-medium mt-0.5">₹{item.price}</div>
+                        <div className="text-slate-500 text-sm font-medium mt-0.5">₹{discountUnitPrice(item.price)}</div>
                       </div>
                       <div>
                         {qty === 0 ? (
                           <button
                             type="button"
                             onPointerDown={(e) => { e.preventDefault(); handleAdd(item); }}
-                            className="px-5 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 active:scale-95 transition-transform"
+                            className="px-5 min-h-11 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 active:scale-95 transition-transform touch-manipulation"
                           >
                             ADD
                           </button>
@@ -430,14 +531,14 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
 
       {/* Mobile Bottom Cart Bar */}
       {cart.length > 0 && !showMobileCart && (
-        <div className="md:hidden fixed bottom-[72px] left-0 right-0 p-4 z-20">
+        <div className="md:hidden fixed left-0 right-0 p-4 mobile-floating-offset z-40">
           <div
             className="bg-indigo-600 rounded-2xl shadow-xl p-4 flex justify-between items-center cursor-pointer active:scale-[0.98] transition-transform"
             onClick={() => setShowMobileCart(true)}
           >
             <div className="text-white">
               <div className="font-bold text-lg">{totalItems} item{totalItems > 1 ? 's' : ''}</div>
-              <div className="text-indigo-100 text-sm font-medium truncate max-w-[200px]">{summaryText}</div>
+              <div className="text-indigo-100 text-sm font-medium truncate max-w-[55vw] sm:max-w-[280px]">{summaryText}</div>
             </div>
             <div className="flex flex-col items-end">
               <div className="text-white font-bold text-lg">₹{total}</div>
@@ -451,19 +552,30 @@ export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
 
       {/* Mobile Cart Modal */}
       {showMobileCart && (
-        <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white">
-          <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200 shrink-0">
-            <h2 className="text-xl font-bold text-slate-800">Your Order</h2>
-            <button
-              type="button"
-              onClick={() => setShowMobileCart(false)}
-              className="p-2 bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-transform"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto flex flex-col">
-            <CartContent />
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/45 backdrop-blur-[1px]"
+          onClick={() => setShowMobileCart(false)}
+        >
+          <div
+            className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-2xl max-h-[92vh] min-h-[65vh] flex flex-col pb-safe"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="pt-2 pb-1 flex justify-center">
+              <div className="h-1.5 w-12 rounded-full bg-slate-300" />
+            </div>
+            <div className="flex justify-between items-center px-4 py-3 bg-white border-b border-slate-200 shrink-0">
+              <h2 className="text-lg font-bold text-slate-800">Your Order</h2>
+              <button
+                type="button"
+                onClick={() => setShowMobileCart(false)}
+                className="h-10 w-10 flex items-center justify-center bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-transform touch-manipulation"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 flex flex-col">
+              <CartContent showHeader={false} />
+            </div>
           </div>
         </div>
       )}

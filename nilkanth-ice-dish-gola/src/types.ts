@@ -1,42 +1,43 @@
-export enum OrderStatus {
-  PENDING = 'PENDING',
-  IN_PROGRESS = 'IN_PROGRESS',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
-}
+export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain';
 
 export interface MenuItem {
   id: string;
-  category: string;
-  name: string;
-  price?: number;
-  basePrice?: number;
-  customizable?: boolean;
-}
-
-export interface CartItem {
-  cartId: string;
-  id: string;
   name: string;
   price: number;
+  dishPrice?: number;
+  category: string;
+  hasVariants?: boolean;
+  hasGolaVariants?: boolean;
+  golaVariantPrices?: Record<GolaVariant, number>;
+}
+
+export interface CartItem extends MenuItem {
+  cartItemId: string;
   quantity: number;
-  variantId?: string;
-  variantName?: string;
+  variant?: 'Stick' | 'Dish' | GolaVariant;
+  calculatedPrice: number;
 }
 
 export interface Order {
-  id: number;
-  token: number;
-  items: string; // JSON string
-  totalPrice: number;
-  isParcel: boolean;
-  status: OrderStatus;
-  createdAt: string;
+  id: string;
+  orderNumber: number;
+  customerName: string;
+  items: CartItem[];
+  total: number;
+  status: 'pending' | 'completed';
+  paymentMethod: 'cash' | 'upi' | 'pay_later';
+  paymentStatus: 'paid' | 'unpaid';
+  timestamp: number;
 }
 
-export interface OrderItem {
-  name: string;
-  quantity: number;
-  price: number;
-  variantName?: string;
+export interface Expense {
+  id: string;
+  description: string;
+  amount: number;
+  timestamp: number;
+}
+
+export interface PricingRule {
+  discountPercent: number;
+  bogoEnabled: boolean;
 }
