@@ -4,9 +4,14 @@ import { supabase } from '../lib/supabase';
 
 interface AuthGateProps {
   loading: boolean;
+  onLocalAuth?: (username: string) => void;
 }
 
-export function AuthGate({ loading }: AuthGateProps) {
+const LOCAL_AUTH_USER = (import.meta.env.VITE_POS_AUTH_USER as string | undefined)?.trim();
+const LOCAL_AUTH_PASS = (import.meta.env.VITE_POS_AUTH_PASS as string | undefined)?.trim();
+const LOCAL_AUTH_ENABLED = Boolean(LOCAL_AUTH_USER && LOCAL_AUTH_PASS);
+
+export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -14,21 +19,31 @@ export function AuthGate({ loading }: AuthGateProps) {
 
   const handleSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError('Enter staff email and password.');
+    const identifier = email.trim();
+    const passwordValue = password.trim();
+    if (!identifier || !passwordValue) {
+      setError('Enter staff username/email and password.');
+      return;
+    }
+
+    if (LOCAL_AUTH_ENABLED && identifier === LOCAL_AUTH_USER && passwordValue === LOCAL_AUTH_PASS) {
+      onLocalAuth?.(identifier);
       return;
     }
 
     setSigningIn(true);
     setError(null);
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
+      email: identifier,
+      password: passwordValue,
     });
     setSigningIn(false);
 
     if (signInError) {
-      setError(signInError.message || 'Unable to sign in.');
+      const hint = LOCAL_AUTH_ENABLED
+        ? 'Use local POS username/password from .env.local or a valid Supabase staff email.'
+        : 'Use a valid Supabase staff email/password.';
+      setError(`${signInError.message || 'Unable to sign in.'} ${hint}`);
     }
   };
 
@@ -37,7 +52,7 @@ export function AuthGate({ loading }: AuthGateProps) {
       <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-slate-900">POS Staff Login</h1>
-          <p className="text-sm text-slate-500 mt-1">Use your staff account to access POS operations.</p>
+          <p className="text-sm text-slate-500 mt-1">Use staff credentials to access POS operations.</p>
         </div>
 
         <form onSubmit={handleSignIn} className="space-y-4">
@@ -48,7 +63,7 @@ export function AuthGate({ loading }: AuthGateProps) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Enter your username"
+              placeholder="Enter username or staff email"
               autoComplete="username"
             />
           </div>
@@ -79,6 +94,12 @@ export function AuthGate({ loading }: AuthGateProps) {
             {signingIn ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
+
+        {LOCAL_AUTH_ENABLED && (
+          <p className="mt-4 text-xs text-slate-500">
+            Local POS auth is enabled via <code>VITE_POS_AUTH_USER</code>/<code>VITE_POS_AUTH_PASS</code>.
+          </p>
+        )}
       </div>
     </div>
   );

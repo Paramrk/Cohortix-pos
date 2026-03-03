@@ -47,6 +47,13 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [session, setSession] = useState<Session | null>(null);
+  const [localAuthUser, setLocalAuthUser] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('pos_local_auth_session_v1');
+    } catch {
+      return null;
+    }
+  });
   const [authLoading, setAuthLoading] = useState(true);
   const {
     orders, expenses, menuItems, loading,
@@ -97,6 +104,12 @@ export default function App() {
     };
   }, [refreshAll]);
 
+  useEffect(() => {
+    if (session || localAuthUser) {
+      void refreshAll();
+    }
+  }, [localAuthUser, refreshAll, session]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -108,8 +121,16 @@ export default function App() {
     );
   }
 
-  if (!session) {
-    return <AuthGate loading={loading} />;
+  if (!session && !localAuthUser) {
+    return (
+      <AuthGate
+        loading={loading}
+        onLocalAuth={(username) => {
+          localStorage.setItem('pos_local_auth_session_v1', username);
+          setLocalAuthUser(username);
+        }}
+      />
+    );
   }
 
   if (loading) {
@@ -124,6 +145,8 @@ export default function App() {
   }
 
   const handleSignOut = async () => {
+    localStorage.removeItem('pos_local_auth_session_v1');
+    setLocalAuthUser(null);
     await supabase.auth.signOut();
   };
 
