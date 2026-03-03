@@ -29,6 +29,10 @@ export interface Order {
   paymentMethod: 'cash' | 'upi' | 'pay_later';
   paymentStatus: 'paid' | 'unpaid';
   timestamp: number;
+  businessDate?: string;
+  source?: 'pos' | 'customer';
+  clientRequestId?: string;
+  shopId?: string;
 }
 
 export interface Expense {
@@ -41,4 +45,28 @@ export interface Expense {
 export interface PricingRule {
   discountPercent: number;
   bogoEnabled: boolean;
+}
+
+export interface OrderCreateResult {
+  orderId: string;
+  orderNumber: number;
+  timestamp: number;
+  businessDate?: string;
+  source?: 'pos' | 'customer';
+  clientRequestId?: string;
+}
+
+export interface DashboardMetrics {
+  businessDate: string;
+  shopId: string;
+  todayTotalSales: number;
+  todayCollected: number;
+  todayPending: number;
+  todayExpenses: number;
+  todayNetProfit: number;
+  monthTotalSales: number;
+  monthCollected: number;
+  monthPending: number;
+  monthExpenses: number;
+  monthNetProfit: number;
 }

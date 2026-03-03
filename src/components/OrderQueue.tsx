@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Clock, User, QrCode } from 'lucide-react';
 import { Order } from '../types';
 
@@ -230,14 +230,32 @@ export function OrderQueue({
 }: OrderQueueProps) {
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
   const [mobileSection, setMobileSection] = useState<'pending' | 'completed'>('pending');
+  const [pendingRenderLimit, setPendingRenderLimit] = useState(40);
 
-  const pendingOrders = orders
-    .filter((o) => o.status === 'pending')
-    .sort((a, b) => a.timestamp - b.timestamp);
-  const completedOrders = orders
-    .filter((o) => o.status === 'completed')
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 10);
+  const pendingOrders = useMemo(
+    () =>
+      orders
+        .filter((order) => order.status === 'pending')
+        .sort((a, b) => a.timestamp - b.timestamp),
+    [orders],
+  );
+  const completedOrders = useMemo(
+    () =>
+      orders
+        .filter((order) => order.status === 'completed')
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 10),
+    [orders],
+  );
+
+  const shouldChunkPendingRender = pendingOrders.length > 40;
+  const visiblePendingOrders = shouldChunkPendingRender
+    ? pendingOrders.slice(0, pendingRenderLimit)
+    : pendingOrders;
+
+  useEffect(() => {
+    setPendingRenderLimit(40);
+  }, [pendingOrders.length]);
 
   return (
     <div className="mobile-bottom-offset md:pb-0">
@@ -295,7 +313,7 @@ export function OrderQueue({
               <p className="font-medium">No pending orders. Time to relax!</p>
             </div>
           ) : (
-            pendingOrders.map((order) => (
+            visiblePendingOrders.map((order) => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -309,6 +327,15 @@ export function OrderQueue({
             ))
           )}
         </div>
+        {shouldChunkPendingRender && visiblePendingOrders.length < pendingOrders.length && (
+          <button
+            type="button"
+            onClick={() => setPendingRenderLimit((prev) => Math.min(prev + 20, pendingOrders.length))}
+            className="mt-4 w-full min-h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-sm"
+          >
+            Load More Orders ({pendingOrders.length - visiblePendingOrders.length} remaining)
+          </button>
+        )}
       </div>
 
       {/* Completed Orders */}

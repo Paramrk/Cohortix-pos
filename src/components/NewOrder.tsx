@@ -1,11 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
-import { MenuItem, CartItem, Order, GolaVariant, PricingRule } from '../types';
+import { MenuItem, CartItem, Order, GolaVariant, PricingRule, OrderCreateResult } from '../types';
 
 interface NewOrderProps {
   menuItems: MenuItem[];
-  onPlaceOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => void | Promise<void>;
+  onPlaceOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => Promise<OrderCreateResult | null>;
   pricingRule: PricingRule;
+  orderPending: boolean;
+  orderError: string | null;
+  onClearOrderError: () => void;
 }
 
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
@@ -45,7 +48,7 @@ function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
   );
 }
 
-export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps) {
+export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, orderError, onClearOrderError }: NewOrderProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [orderInstructions, setOrderInstructions] = useState('');
@@ -75,12 +78,20 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
     return Math.max(0, Math.round(price * (100 - pricingRule.discountPercent) / 100));
   };
 
+  const quantityByVariant = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of cart) {
+      map.set(`${item.id}::${item.variant ?? 'default'}`, item.quantity);
+    }
+    return map;
+  }, [cart]);
+
   const getCartQuantity = (itemId: string, variant?: string) => {
-    const item = cart.find((i) => i.id === itemId && i.variant === variant);
-    return item ? item.quantity : 0;
+    return quantityByVariant.get(`${itemId}::${variant ?? 'default'}`) ?? 0;
   };
 
   const handleAdd = useCallback((item: MenuItem, variant?: string) => {
+    onClearOrderError();
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id && i.variant === variant);
       if (existing) {
@@ -99,9 +110,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
         { ...item, cartItemId: crypto.randomUUID(), quantity: 1, variant: variant as any, calculatedPrice },
       ];
     });
-  }, []);
+  }, [onClearOrderError]);
 
   const handleRemove = useCallback((item: MenuItem, variant?: string) => {
+    onClearOrderError();
     setCart((prev) => {
       const existing = prev.find((i) => i.id === item.id && i.variant === variant);
       if (!existing) return prev;
@@ -112,13 +124,15 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
         i.cartItemId === existing.cartItemId ? { ...i, quantity: i.quantity - 1 } : i
       );
     });
-  }, []);
+  }, [onClearOrderError]);
 
   const removeFromCart = useCallback((cartItemId: string) => {
+    onClearOrderError();
     setCart((prev) => prev.filter((i) => i.cartItemId !== cartItemId));
-  }, []);
+  }, [onClearOrderError]);
 
   const updateQuantity = useCallback((cartItemId: string, delta: number) => {
+    onClearOrderError();
     setCart((prev) =>
       prev.map((i) => {
         if (i.cartItemId === cartItemId) {
@@ -129,7 +143,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
         return i;
       })
     );
-  }, []);
+  }, [onClearOrderError]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
   const subtotalAfterBogo = cart.reduce((sum, item) => {
@@ -141,9 +155,9 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
   const total = Math.max(0, subtotalAfterBogo - percentDiscountAmount);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleCheckout = () => {
-    if (cart.length === 0) return;
-    onPlaceOrder({
+  const handleCheckout = async () => {
+    if (cart.length === 0 || orderPending) return;
+    const result = await onPlaceOrder({
       customerName: customerName.trim() || 'Guest',
       orderInstructions: orderInstructions.trim() || undefined,
       items: cart,
@@ -152,6 +166,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
       paymentMethod,
       paymentStatus: paymentMethod === 'pay_later' ? 'unpaid' : 'paid',
     });
+    if (!result) return;
     setCart([]);
     setCustomerName('');
     setOrderInstructions('');
@@ -159,7 +174,14 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
     setShowMobileCart(false);
   };
 
-  const categories = Array.from(new Set(menuItems.map((i) => i.category)));
+  const categories = useMemo(() => Array.from(new Set(menuItems.map((i) => i.category))), [menuItems]);
+  const categoryItemsMap = useMemo(() => {
+    const map = new Map<string, MenuItem[]>();
+    for (const category of categories) {
+      map.set(category, menuItems.filter((item) => item.category === category));
+    }
+    return map;
+  }, [categories, menuItems]);
 
   const cartItemNames = Array.from(new Set(cart.map((i) => i.name)));
   const summaryText =
@@ -260,7 +282,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
             type="text"
             placeholder="Customer Name (Optional)"
             value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
+            onChange={(e) => {
+              onClearOrderError();
+              setCustomerName(e.target.value);
+            }}
             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
           />
         </div>
@@ -268,7 +293,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
           <textarea
             placeholder="Custom Instructions (Optional) - e.g. less syrup, no dry fruit"
             value={orderInstructions}
-            onChange={(e) => setOrderInstructions(e.target.value)}
+            onChange={(e) => {
+              onClearOrderError();
+              setOrderInstructions(e.target.value);
+            }}
             rows={2}
             maxLength={220}
             className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white resize-none"
@@ -278,7 +306,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
         <div className="flex gap-2 mb-4">
           <button
             type="button"
-            onClick={() => setPaymentMethod('cash')}
+            onClick={() => {
+              onClearOrderError();
+              setPaymentMethod('cash');
+            }}
             className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'cash'
               ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
@@ -288,7 +319,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
           </button>
           <button
             type="button"
-            onClick={() => setPaymentMethod('upi')}
+            onClick={() => {
+              onClearOrderError();
+              setPaymentMethod('upi');
+            }}
             className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'upi'
               ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
@@ -298,7 +332,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
           </button>
           <button
             type="button"
-            onClick={() => setPaymentMethod('pay_later')}
+            onClick={() => {
+              onClearOrderError();
+              setPaymentMethod('pay_later');
+            }}
             className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'pay_later'
               ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
               : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
@@ -338,13 +375,19 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
           </div>
         </div>
 
+        {orderError && (
+          <p className="mb-3 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            {orderError}
+          </p>
+        )}
+
         <button
           type="button"
-          onClick={handleCheckout}
-          disabled={cart.length === 0}
+          onClick={() => { void handleCheckout(); }}
+          disabled={cart.length === 0 || orderPending}
           className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
         >
-          Place Order
+          {orderPending ? 'Placing Order...' : 'Place Order'}
         </button>
       </div>
     </>
@@ -374,7 +417,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule }: NewOrderProps
                 {category}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {menuItems.filter((item) => item.category === category).map((item) => {
+                {(categoryItemsMap.get(category) ?? []).map((item) => {
                   const isExpanded = expandedItemId === item.id;
 
                   // ---- Gola variants (4 options) ----

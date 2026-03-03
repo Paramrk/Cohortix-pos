@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Order, Expense, MenuItem, PricingRule } from './types';
+import { Order, Expense, MenuItem, PricingRule, OrderCreateResult, DashboardMetrics } from './types';
 import { supabase } from './lib/supabase';
+import { recordOrderCreate, recordRealtimeDisconnect } from './lib/telemetry';
 
 const PRICING_RULE_STORAGE_KEY = 'pos_pricing_rule_v1';
 const PRICING_RULE_MENU_NAME = '__pricing_rule__';
 const PRICING_RULE_MENU_CATEGORY = '__system__';
 const ORDER_SYNC_INTERVAL_MS = 12000;
+const SHOP_ID = 'main';
 const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
   bogoEnabled: false,
@@ -14,6 +16,32 @@ const DEFAULT_PRICING_RULE: PricingRule = {
 function clampDiscountPercent(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function toSafeNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getBusinessDateString(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  }).format(date);
+}
+
+function monthStartTimestampInIst() {
+  const now = new Date();
+  const year = Number(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric' }).format(now),
+  );
+  const month = Number(
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', month: '2-digit' }).format(now),
+  );
+  return new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00+05:30`).getTime();
+}
+
+function businessDateFromTimestamp(timestamp: number) {
+  return getBusinessDateString(new Date(timestamp));
 }
 
 function readPricingRule(): PricingRule {
@@ -41,35 +69,19 @@ function pricingRuleFromMenuRow(row: Record<string, unknown>): PricingRule {
   };
 }
 
-// Helper: today's start/end as unix ms
-function todayRange() {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
-  return { start: start.getTime(), end: end.getTime() };
-}
-
-function isTodayTimestamp(timestamp: number) {
-  const { start, end } = todayRange();
-  return timestamp >= start && timestamp <= end;
-}
-
-// Map DB row → MenuItem
 function toMenuItem(row: Record<string, unknown>): MenuItem {
   return {
-    id: row.id as string,
-    name: row.name as string,
-    price: Number(row.price),
-    dishPrice: row.dish_price != null ? Number(row.dish_price) : undefined,
-    category: row.category as string,
-    hasVariants: (row.has_variants as boolean) || false,
-    hasGolaVariants: (row.has_gola_variants as boolean) || false,
+    id: String(row.id),
+    name: String(row.name ?? ''),
+    price: toSafeNumber(row.price),
+    dishPrice: row.dish_price != null ? toSafeNumber(row.dish_price) : undefined,
+    category: String(row.category ?? 'Regular'),
+    hasVariants: Boolean(row.has_variants) || false,
+    hasGolaVariants: Boolean(row.has_gola_variants) || false,
     golaVariantPrices: row.gola_variant_prices ? (row.gola_variant_prices as any) : undefined,
   };
 }
 
-// Map DB row → Order
 function toOrder(row: Record<string, unknown>): Order {
   const rawInstructions =
     typeof row.order_instructions === 'string'
@@ -78,27 +90,55 @@ function toOrder(row: Record<string, unknown>): Order {
         ? row.instructions
         : null;
 
+  const timestamp = toSafeNumber(row.timestamp);
+  const businessDate =
+    typeof row.business_date === 'string' && row.business_date
+      ? row.business_date
+      : businessDateFromTimestamp(timestamp);
+
+  const source = row.source === 'pos' || row.source === 'customer' ? row.source : undefined;
+
   return {
-    id: row.id as string,
-    orderNumber: row.order_number as number,
-    customerName: row.customer_name as string,
-    orderInstructions: rawInstructions ? rawInstructions : undefined,
-    items: row.items as Order['items'],
-    total: Number(row.total),
-    status: row.status as Order['status'],
-    paymentMethod: row.payment_method as Order['paymentMethod'],
-    paymentStatus: row.payment_status as Order['paymentStatus'],
-    timestamp: row.timestamp as number,
+    id: String(row.id),
+    orderNumber: toSafeNumber(row.order_number),
+    customerName: String(row.customer_name ?? 'Guest'),
+    orderInstructions: rawInstructions || undefined,
+    items: (row.items as Order['items']) ?? [],
+    total: toSafeNumber(row.total),
+    status: (row.status as Order['status']) ?? 'pending',
+    paymentMethod: (row.payment_method as Order['paymentMethod']) ?? 'cash',
+    paymentStatus: (row.payment_status as Order['paymentStatus']) ?? 'unpaid',
+    timestamp,
+    businessDate,
+    source,
+    clientRequestId: typeof row.client_request_id === 'string' ? row.client_request_id : undefined,
+    shopId: typeof row.shop_id === 'string' ? row.shop_id : undefined,
   };
 }
 
-// Map DB row → Expense
 function toExpense(row: Record<string, unknown>): Expense {
   return {
-    id: row.id as string,
-    description: row.description as string,
-    amount: Number(row.amount),
-    timestamp: row.timestamp as number,
+    id: String(row.id),
+    description: String(row.description ?? ''),
+    amount: toSafeNumber(row.amount),
+    timestamp: toSafeNumber(row.timestamp),
+  };
+}
+
+function toDashboardMetrics(payload: Record<string, unknown>): DashboardMetrics {
+  return {
+    businessDate: String(payload.business_date ?? getBusinessDateString()),
+    shopId: String(payload.shop_id ?? SHOP_ID),
+    todayTotalSales: toSafeNumber(payload.today_total_sales),
+    todayCollected: toSafeNumber(payload.today_collected),
+    todayPending: toSafeNumber(payload.today_pending),
+    todayExpenses: toSafeNumber(payload.today_expenses),
+    todayNetProfit: toSafeNumber(payload.today_net_profit),
+    monthTotalSales: toSafeNumber(payload.month_total_sales),
+    monthCollected: toSafeNumber(payload.month_collected),
+    monthPending: toSafeNumber(payload.month_pending),
+    monthExpenses: toSafeNumber(payload.month_expenses),
+    monthNetProfit: toSafeNumber(payload.month_net_profit),
   };
 }
 
@@ -120,21 +160,19 @@ function upsertMenuItem(list: MenuItem[], menuItem: MenuItem) {
   return next;
 }
 
-function buildOrderFingerprint(order: {
-  timestamp: number;
-  customerName: string;
-  total: number;
-  itemCount: number;
-}) {
-  return `${order.timestamp}|${order.customerName}|${order.total}|${order.itemCount}`;
-}
-
 function isMissingColumnError(error: { code?: string; message?: string } | null, column: string) {
   return (
     error?.code === 'PGRST204' &&
     typeof error.message === 'string' &&
     error.message.includes(`'${column}' column`)
   );
+}
+
+function isPermissionError(error: { code?: string; message?: string } | null) {
+  if (!error) return false;
+  if (error.code === '42501') return true;
+  const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  return message.includes('permission denied') || message.includes('row-level security');
 }
 
 export function useStore() {
@@ -145,7 +183,11 @@ export function useStore() {
   const [pricingRule, setPricingRule] = useState<PricingRule>(() => readPricingRule());
   const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
   const [ordersRealtimeConnected, setOrdersRealtimeConnected] = useState(false);
-  const localInsertFingerprintsRef = useRef<Map<string, number>>(new Map());
+  const [orderPending, setOrderPending] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
+  const [dashboardMetricsLoading, setDashboardMetricsLoading] = useState(false);
+  const localInsertRequestIdsRef = useRef<Map<string, number>>(new Map());
 
   const persistPricingRuleToSupabase = useCallback(async (rule: PricingRule) => {
     const rowWithGola = {
@@ -156,6 +198,7 @@ export function useStore() {
       has_variants: false,
       has_gola_variants: false,
       gola_variant_prices: null,
+      shop_id: SHOP_ID,
     };
     const rowLegacy = {
       name: PRICING_RULE_MENU_NAME,
@@ -165,86 +208,195 @@ export function useStore() {
       has_variants: false,
     };
 
-    const { data: existingRows } = await supabase
+    let query = supabase
       .from('menu_items')
       .select('id')
       .eq('name', PRICING_RULE_MENU_NAME)
       .eq('category', PRICING_RULE_MENU_CATEGORY)
       .limit(1);
+
+    const withShopId = await query.eq('shop_id', SHOP_ID);
+    const existingRows = (withShopId.data ?? []).length > 0 || !isMissingColumnError(withShopId.error, 'shop_id')
+      ? withShopId.data
+      : (await supabase
+          .from('menu_items')
+          .select('id')
+          .eq('name', PRICING_RULE_MENU_NAME)
+          .eq('category', PRICING_RULE_MENU_CATEGORY)
+          .limit(1)).data;
+
     const existingId = existingRows?.[0]?.id as string | undefined;
 
     if (existingId) {
       let { error } = await supabase.from('menu_items').update(rowWithGola).eq('id', existingId);
-      if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants')) {
+      if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants') || isMissingColumnError(error, 'shop_id')) {
         ({ error } = await supabase.from('menu_items').update(rowLegacy).eq('id', existingId));
+      }
+      if (error) {
+        console.error('Failed to persist pricing rule', error.code, error.message);
       }
       return;
     }
 
     let { error } = await supabase.from('menu_items').insert(rowWithGola);
-    if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants')) {
+    if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants') || isMissingColumnError(error, 'shop_id')) {
       ({ error } = await supabase.from('menu_items').insert(rowLegacy));
+    }
+    if (error) {
+      console.error('Failed to insert pricing rule row', error.code, error.message);
     }
   }, []);
 
-  // Initial data fetch
+  const refreshDashboardMetrics = useCallback(async () => {
+    setDashboardMetricsLoading(true);
+    const startedAt = performance.now();
+    const { data, error } = await supabase.rpc('get_dashboard_metrics', {
+      p_business_date: getBusinessDateString(),
+      p_shop_id: SHOP_ID,
+    });
+
+    if (!error && data) {
+      const raw = Array.isArray(data) ? data[0] : data;
+      if (raw && typeof raw === 'object') {
+        setDashboardMetrics(toDashboardMetrics(raw as Record<string, unknown>));
+      }
+    } else if (error && !isPermissionError(error)) {
+      console.error('Failed to fetch dashboard metrics', error.code, error.message);
+    }
+
+    setDashboardMetricsLoading(false);
+    console.info('[telemetry]', JSON.stringify({
+      type: 'dashboard_metrics_fetch',
+      latencyMs: Math.round(performance.now() - startedAt),
+      success: !error,
+    }));
+  }, []);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const { start, end } = todayRange();
+    const businessDate = getBusinessDateString();
+    const monthStartMs = monthStartTimestampInIst();
 
-    const [menuRes, ordersRes, expensesRes] = await Promise.all([
-      supabase.from('menu_items').select('*').order('created_at'),
-      supabase.from('orders').select('*').gte('timestamp', start).lte('timestamp', end).order('timestamp', { ascending: false }),
-      supabase.from('expenses').select('*').order('timestamp', { ascending: false }),
-    ]);
+    const menuReq = supabase.from('menu_items').select('*').eq('shop_id', SHOP_ID).order('created_at');
+    const ordersReq = supabase
+      .from('orders')
+      .select('*')
+      .eq('business_date', businessDate)
+      .eq('shop_id', SHOP_ID)
+      .order('timestamp', { ascending: false });
+    const expensesReq = supabase
+      .from('expenses')
+      .select('*')
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', monthStartMs)
+      .order('timestamp', { ascending: false });
 
-    if (menuRes.data) {
-      const pricingRow = menuRes.data.find((row) => isPricingRuleMenuRow(row as Record<string, unknown>));
+    const [menuRes, ordersRes, expensesRes] = await Promise.all([menuReq, ordersReq, expensesReq]);
+
+    let menuData = menuRes.data;
+    if (isMissingColumnError(menuRes.error, 'shop_id')) {
+      const fallback = await supabase.from('menu_items').select('*').order('created_at');
+      menuData = fallback.data;
+    }
+
+    if (menuData) {
+      const pricingRow = menuData.find((row) => isPricingRuleMenuRow(row as Record<string, unknown>));
       if (pricingRow) {
         const nextRule = pricingRuleFromMenuRow(pricingRow as Record<string, unknown>);
         setPricingRule(nextRule);
         localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(nextRule));
       }
       setMenuItems(
-        menuRes.data
+        menuData
           .filter((row) => !isPricingRuleMenuRow(row as Record<string, unknown>))
-          .map(toMenuItem)
+          .map(toMenuItem),
       );
     }
-    if (ordersRes.data) setOrders(ordersRes.data.map(toOrder));
-    if (expensesRes.data) setExpenses(expensesRes.data.map(toExpense));
+
+    if (ordersRes.data) {
+      setOrders(ordersRes.data.map((row) => toOrder(row as Record<string, unknown>)));
+    } else if (isMissingColumnError(ordersRes.error, 'business_date') || isMissingColumnError(ordersRes.error, 'shop_id')) {
+      // Backward compatibility path before migration is applied.
+      const fallback = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
+      if (fallback.data) {
+        const today = getBusinessDateString();
+        setOrders(
+          fallback.data
+            .map((row) => toOrder(row as Record<string, unknown>))
+            .filter((order) => order.businessDate === today),
+        );
+      }
+    } else if (ordersRes.error && !isPermissionError(ordersRes.error)) {
+      console.error('Failed to fetch orders', ordersRes.error.code, ordersRes.error.message);
+    }
+
+    if (expensesRes.data) {
+      setExpenses(expensesRes.data.map((row) => toExpense(row as Record<string, unknown>)));
+    } else if (isMissingColumnError(expensesRes.error, 'shop_id')) {
+      const fallback = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('timestamp', monthStartMs)
+        .order('timestamp', { ascending: false });
+      if (fallback.data) {
+        setExpenses(fallback.data.map((row) => toExpense(row as Record<string, unknown>)));
+      }
+    } else if (expensesRes.error && !isPermissionError(expensesRes.error)) {
+      console.error('Failed to fetch expenses', expensesRes.error.code, expensesRes.error.message);
+    }
+
     setLoading(false);
-  }, []);
+    void refreshDashboardMetrics();
+  }, [refreshDashboardMetrics]);
 
   useEffect(() => {
-    fetchAll();
+    void fetchAll();
   }, [fetchAll]);
 
   const refreshOrders = useCallback(async () => {
-    const { start, end } = todayRange();
+    const businessDate = getBusinessDateString();
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .gte('timestamp', start)
-      .lte('timestamp', end)
+      .eq('business_date', businessDate)
+      .eq('shop_id', SHOP_ID)
       .order('timestamp', { ascending: false });
+
     if (!error && data) {
-      setOrders(data.map(toOrder));
+      setOrders(data.map((row) => toOrder(row as Record<string, unknown>)));
+      return;
+    }
+
+    if ((isMissingColumnError(error, 'business_date') || isMissingColumnError(error, 'shop_id')) && error) {
+      const fallback = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
+      if (fallback.data) {
+        const today = getBusinessDateString();
+        setOrders(
+          fallback.data
+            .map((row) => toOrder(row as Record<string, unknown>))
+            .filter((order) => order.businessDate === today),
+        );
+      }
+      return;
+    }
+
+    if (error && !isPermissionError(error)) {
+      console.error('Failed to refresh orders', error.code, error.message);
     }
   }, []);
 
-  // Realtime sync: keep menu and orders consistent across POS + customer devices.
   useEffect(() => {
     const ordersChannel = supabase
       .channel('pos-live-orders')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
+        { event: '*', schema: 'public', table: 'orders', filter: `shop_id=eq.${SHOP_ID}` },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.id as string | undefined;
             if (!deletedId) return;
             setOrders((prev) => prev.filter((order) => order.id !== deletedId));
+            void refreshDashboardMetrics();
             return;
           }
 
@@ -252,30 +404,27 @@ export function useStore() {
           if (!row) return;
 
           const parsed = toOrder(row);
-          if (!isTodayTimestamp(parsed.timestamp)) return;
+          if (parsed.businessDate !== getBusinessDateString()) return;
 
           if (payload.eventType === 'INSERT') {
-            const fingerprint = buildOrderFingerprint({
-              timestamp: parsed.timestamp,
-              customerName: parsed.customerName,
-              total: parsed.total,
-              itemCount: parsed.items.length,
-            });
-            const expiresAt = localInsertFingerprintsRef.current.get(fingerprint);
+            const requestId = parsed.clientRequestId;
+            const expiresAt = requestId ? localInsertRequestIdsRef.current.get(requestId) : undefined;
             const isLocalInsert = typeof expiresAt === 'number' && expiresAt > Date.now();
-            localInsertFingerprintsRef.current.delete(fingerprint);
+            if (requestId) localInsertRequestIdsRef.current.delete(requestId);
 
             setOrders((prev) => upsertOrder(prev, parsed));
-            if (!isLocalInsert) {
+            if (!isLocalInsert && parsed.source === 'customer') {
               setIncomingOrderNotification(parsed);
             }
+            void refreshDashboardMetrics();
             return;
           }
 
           if (payload.eventType === 'UPDATE') {
             setOrders((prev) => upsertOrder(prev, parsed));
+            void refreshDashboardMetrics();
           }
-        }
+        },
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -284,6 +433,7 @@ export function useStore() {
         }
         if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
           setOrdersRealtimeConnected(false);
+          recordRealtimeDisconnect('pos', 'pos-live-orders', status);
           void refreshOrders();
         }
       });
@@ -292,7 +442,7 @@ export function useStore() {
       .channel('pos-live-menu')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'menu_items' },
+        { event: '*', schema: 'public', table: 'menu_items', filter: `shop_id=eq.${SHOP_ID}` },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.id as string | undefined;
@@ -312,7 +462,7 @@ export function useStore() {
           const row = payload.new as Record<string, unknown> | null;
           if (!row) return;
 
-           if (isPricingRuleMenuRow(row)) {
+          if (isPricingRuleMenuRow(row)) {
             const nextRule = pricingRuleFromMenuRow(row);
             setPricingRule(nextRule);
             localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(nextRule));
@@ -321,16 +471,20 @@ export function useStore() {
 
           const parsed = toMenuItem(row);
           setMenuItems((prev) => upsertMenuItem(prev, parsed));
-        }
+        },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+          recordRealtimeDisconnect('pos', 'pos-live-menu', status);
+        }
+      });
 
     return () => {
       setOrdersRealtimeConnected(false);
       void supabase.removeChannel(ordersChannel);
       void supabase.removeChannel(menuChannel);
     };
-  }, [refreshOrders]);
+  }, [refreshDashboardMetrics, refreshOrders]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -344,78 +498,95 @@ export function useStore() {
   useEffect(() => {
     const onFocus = () => {
       void refreshOrders();
+      void refreshDashboardMetrics();
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [refreshOrders]);
+  }, [refreshDashboardMetrics, refreshOrders]);
 
-  // Derive today's order counter
-  const getNextOrderNumber = useCallback(async (): Promise<number> => {
-    const { start, end } = todayRange();
-    const { count } = await supabase
-      .from('orders')
-      .select('*', { count: 'exact', head: true })
-      .gte('timestamp', start)
-      .lte('timestamp', end);
-    return (count ?? 0) + 1;
-  }, []);
+  const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>): Promise<OrderCreateResult | null> => {
+    setOrderPending(true);
+    setOrderError(null);
 
-  const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => {
-    const orderNumber = await getNextOrderNumber();
-    const timestamp = Date.now();
-    const fingerprint = buildOrderFingerprint({
-      timestamp,
-      customerName: orderData.customerName,
-      total: orderData.total,
-      itemCount: orderData.items.length,
+    const startedAt = performance.now();
+    const clientRequestId = crypto.randomUUID();
+    localInsertRequestIdsRef.current.set(clientRequestId, Date.now() + 30000);
+
+    const itemsPayload = orderData.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.calculatedPrice,
+      variantName: item.variant,
+    }));
+
+    const { data, error } = await supabase.rpc('create_order_atomic', {
+      p_customer_name: orderData.customerName,
+      p_items: itemsPayload,
+      p_total: Math.round(orderData.total),
+      p_payment_method: orderData.paymentMethod,
+      p_payment_status: orderData.paymentStatus,
+      p_order_instructions: orderData.orderInstructions ?? null,
+      p_source: 'pos',
+      p_client_request_id: clientRequestId,
+      p_shop_id: SHOP_ID,
     });
-    localInsertFingerprintsRef.current.set(fingerprint, Date.now() + 15000);
 
-    const newOrder = {
-      order_number: orderNumber,
-      customer_name: orderData.customerName,
-      order_instructions: orderData.orderInstructions ?? null,
-      items: orderData.items,
-      total: orderData.total,
-      status: orderData.status,
-      payment_method: orderData.paymentMethod,
-      payment_status: orderData.paymentStatus,
-      timestamp,
-    };
+    setOrderPending(false);
 
-    const legacyOrder = {
-      order_number: orderNumber,
-      customer_name: orderData.customerName,
-      items: orderData.items,
-      total: orderData.total,
-      status: orderData.status,
-      payment_method: orderData.paymentMethod,
-      payment_status: orderData.paymentStatus,
-      timestamp,
-    };
-
-    let { data, error } = await supabase.from('orders').insert(newOrder).select().single();
-    if (isMissingColumnError(error, 'order_instructions')) {
-      ({ data, error } = await supabase.from('orders').insert(legacyOrder).select().single());
+    if (error) {
+      localInsertRequestIdsRef.current.delete(clientRequestId);
+      const message = isPermissionError(error)
+        ? 'Sign in as staff to create orders.'
+        : error.message || 'Failed to place order. Please try again.';
+      setOrderError(message);
+      recordOrderCreate('pos', false, performance.now() - startedAt, {
+        code: error.code,
+        message: error.message,
+      });
+      return null;
     }
 
-    if (!error && data) {
-      const inserted = toOrder(data);
-      if (!inserted.orderInstructions && orderData.orderInstructions) {
-        inserted.orderInstructions = orderData.orderInstructions;
-      }
-      setOrders((prev) => upsertOrder(prev, inserted));
-      return;
+    const raw = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+    if (!raw) {
+      localInsertRequestIdsRef.current.delete(clientRequestId);
+      setOrderError('Invalid response from server while placing order.');
+      recordOrderCreate('pos', false, performance.now() - startedAt, {
+        message: 'empty response',
+      });
+      return null;
     }
-    localInsertFingerprintsRef.current.delete(fingerprint);
-  }, [getNextOrderNumber]);
+
+    const inserted = toOrder(raw);
+    setOrders((prev) => upsertOrder(prev, inserted));
+    setOrderError(null);
+    void refreshDashboardMetrics();
+
+    recordOrderCreate('pos', true, performance.now() - startedAt, {
+      orderNumber: inserted.orderNumber,
+    });
+
+    return {
+      orderId: inserted.id,
+      orderNumber: inserted.orderNumber,
+      timestamp: inserted.timestamp,
+      businessDate: inserted.businessDate,
+      source: inserted.source,
+      clientRequestId,
+    };
+  }, [refreshDashboardMetrics]);
 
   const updateOrderStatus = useCallback(async (id: string, status: 'pending' | 'completed') => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
     if (!error) {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+      void refreshDashboardMetrics();
+      return;
     }
-  }, []);
+    if (!isPermissionError(error)) {
+      console.error('Failed to update order status', error.code, error.message);
+    }
+  }, [refreshDashboardMetrics]);
 
   const updatePayment = useCallback(async (id: string, method: 'cash' | 'upi') => {
     const { error } = await supabase
@@ -424,10 +595,15 @@ export function useStore() {
       .eq('id', id);
     if (!error) {
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, paymentMethod: method, paymentStatus: 'paid' } : o))
+        prev.map((o) => (o.id === id ? { ...o, paymentMethod: method, paymentStatus: 'paid' } : o)),
       );
+      void refreshDashboardMetrics();
+      return;
     }
-  }, []);
+    if (!isPermissionError(error)) {
+      console.error('Failed to update payment', error.code, error.message);
+    }
+  }, [refreshDashboardMetrics]);
 
   const clearPayment = useCallback(async (id: string, updatedTotal?: number) => {
     const safeAmount =
@@ -446,6 +622,7 @@ export function useStore() {
       .from('orders')
       .update(payload)
       .eq('id', id);
+
     if (!error) {
       setOrders((prev) =>
         prev.map((o) =>
@@ -456,43 +633,68 @@ export function useStore() {
                 paymentStatus: 'unpaid',
                 total: safeAmount ?? o.total,
               }
-            : o
-        )
+            : o,
+        ),
       );
+      void refreshDashboardMetrics();
+      return;
     }
-  }, []);
+    if (!isPermissionError(error)) {
+      console.error('Failed to clear payment', error.code, error.message);
+    }
+  }, [refreshDashboardMetrics]);
 
   const addExpense = useCallback(async (description: string, amount: number) => {
-    const newExpense = { description, amount, timestamp: Date.now() };
-    const { data, error } = await supabase.from('expenses').insert(newExpense).select().single();
+    const newExpense = { description, amount, timestamp: Date.now(), shop_id: SHOP_ID };
+    let { data, error } = await supabase.from('expenses').insert(newExpense).select().single();
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ data, error } = await supabase
+        .from('expenses')
+        .insert({ description, amount, timestamp: Date.now() })
+        .select()
+        .single());
+    }
+
     if (!error && data) {
       setExpenses((prev) => [toExpense(data), ...prev]);
+      void refreshDashboardMetrics();
+      return;
     }
-  }, []);
+
+    if (error && !isPermissionError(error)) {
+      console.error('Failed to add expense', error.code, error.message);
+    }
+  }, [refreshDashboardMetrics]);
 
   const addMenuItem = useCallback(async (item: Omit<MenuItem, 'id'>) => {
     const rowWithGola = {
       name: item.name,
-      price: item.hasGolaVariants ? (item.golaVariantPrices?.['Plain'] ?? item.price) : item.price,
+      price: item.hasGolaVariants ? (item.golaVariantPrices?.Plain ?? item.price) : item.price,
       dish_price: item.dishPrice ?? null,
       category: item.category,
       has_variants: item.hasVariants ?? false,
       has_gola_variants: item.hasGolaVariants ?? false,
       gola_variant_prices: item.hasGolaVariants ? item.golaVariantPrices ?? null : null,
+      shop_id: SHOP_ID,
     };
     const rowLegacy = {
       name: item.name,
-      price: item.hasGolaVariants ? (item.golaVariantPrices?.['Plain'] ?? item.price) : item.price,
+      price: item.hasGolaVariants ? (item.golaVariantPrices?.Plain ?? item.price) : item.price,
       dish_price: item.dishPrice ?? null,
       category: item.category,
       has_variants: item.hasVariants ?? false,
     };
 
     let { data, error } = await supabase.from('menu_items').insert(rowWithGola).select().single();
-    if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants')) {
+    if (
+      isMissingColumnError(error, 'gola_variant_prices') ||
+      isMissingColumnError(error, 'has_gola_variants') ||
+      isMissingColumnError(error, 'shop_id')
+    ) {
       ({ data, error } = await supabase.from('menu_items').insert(rowLegacy).select().single());
     }
-    if (error) throw new Error(error.message);
+
+    if (error) throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
     if (data) {
       setMenuItems((prev) => [...prev, toMenuItem(data)]);
     }
@@ -501,26 +703,32 @@ export function useStore() {
   const updateMenuItem = useCallback(async (id: string, updatedItem: Omit<MenuItem, 'id'>) => {
     const rowWithGola = {
       name: updatedItem.name,
-      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.['Plain'] ?? updatedItem.price) : updatedItem.price,
+      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.Plain ?? updatedItem.price) : updatedItem.price,
       dish_price: updatedItem.dishPrice ?? null,
       category: updatedItem.category,
       has_variants: updatedItem.hasVariants ?? false,
       has_gola_variants: updatedItem.hasGolaVariants ?? false,
       gola_variant_prices: updatedItem.hasGolaVariants ? updatedItem.golaVariantPrices ?? null : null,
+      shop_id: SHOP_ID,
     };
     const rowLegacy = {
       name: updatedItem.name,
-      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.['Plain'] ?? updatedItem.price) : updatedItem.price,
+      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.Plain ?? updatedItem.price) : updatedItem.price,
       dish_price: updatedItem.dishPrice ?? null,
       category: updatedItem.category,
       has_variants: updatedItem.hasVariants ?? false,
     };
 
     let { error } = await supabase.from('menu_items').update(rowWithGola).eq('id', id);
-    if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants')) {
+    if (
+      isMissingColumnError(error, 'gola_variant_prices') ||
+      isMissingColumnError(error, 'has_gola_variants') ||
+      isMissingColumnError(error, 'shop_id')
+    ) {
       ({ error } = await supabase.from('menu_items').update(rowLegacy).eq('id', id));
     }
-    if (error) throw new Error(error.message);
+
+    if (error) throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
     setMenuItems((prev) => prev.map((m) => (m.id === id ? { ...updatedItem, id } : m)));
   }, []);
 
@@ -528,22 +736,50 @@ export function useStore() {
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
     if (!error) {
       setMenuItems((prev) => prev.filter((m) => m.id !== id));
+      return;
+    }
+    if (!isPermissionError(error)) {
+      console.error('Failed to delete menu item', error.code, error.message);
     }
   }, []);
 
   const clearData = useCallback(async () => {
     if (!window.confirm('Are you sure you want to clear all data? This cannot be undone.')) return;
-    const { start, end } = todayRange();
-    await Promise.all([
-      supabase.from('orders').delete().gte('timestamp', start).lte('timestamp', end),
-      supabase.from('expenses').delete().gte('timestamp', 0),
-    ]);
+    const businessDate = getBusinessDateString();
+
+    const deleteOrdersReq = supabase
+      .from('orders')
+      .delete()
+      .eq('business_date', businessDate)
+      .eq('shop_id', SHOP_ID);
+
+    const deleteExpensesReq = supabase
+      .from('expenses')
+      .delete()
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', monthStartTimestampInIst());
+
+    const [ordersRes, expensesRes] = await Promise.all([deleteOrdersReq, deleteExpensesReq]);
+
+    if (ordersRes.error && (isMissingColumnError(ordersRes.error, 'business_date') || isMissingColumnError(ordersRes.error, 'shop_id'))) {
+      await supabase.from('orders').delete().gte('timestamp', 0);
+    }
+
+    if (expensesRes.error && isMissingColumnError(expensesRes.error, 'shop_id')) {
+      await supabase.from('expenses').delete().gte('timestamp', 0);
+    }
+
     setOrders([]);
     setExpenses([]);
-  }, []);
+    void refreshDashboardMetrics();
+  }, [refreshDashboardMetrics]);
 
   const clearIncomingOrderNotification = useCallback(() => {
     setIncomingOrderNotification(null);
+  }, []);
+
+  const clearOrderError = useCallback(() => {
+    setOrderError(null);
   }, []);
 
   const updatePricingRule = useCallback((next: Partial<PricingRule>) => {
@@ -566,6 +802,10 @@ export function useStore() {
     pricingRule,
     ordersRealtimeConnected,
     incomingOrderNotification,
+    orderPending,
+    orderError,
+    dashboardMetrics,
+    dashboardMetricsLoading,
     addOrder,
     updateOrderStatus,
     updatePayment,
@@ -577,6 +817,8 @@ export function useStore() {
     updateMenuItem,
     deleteMenuItem,
     clearIncomingOrderNotification,
+    clearOrderError,
+    refreshAll: fetchAll,
+    refreshDashboardMetrics,
   };
 }
-

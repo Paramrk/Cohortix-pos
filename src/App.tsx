@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Store, ClipboardList, BarChart3, Settings, BellRing } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut } from 'lucide-react';
+import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
 import { NewOrder } from './components/NewOrder';
 import { OrderQueue } from './components/OrderQueue';
 import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
+import { AuthGate } from './components/AuthGate';
+import { supabase } from './lib/supabase';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 
@@ -43,15 +46,23 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
     addMenuItem, updateMenuItem, deleteMenuItem, updatePricingRule,
     incomingOrderNotification, clearIncomingOrderNotification,
     ordersRealtimeConnected, pricingRule,
+    orderPending, orderError, clearOrderError,
+    dashboardMetrics, dashboardMetricsLoading,
+    refreshAll,
   } = useStore();
 
-  const pendingCount = orders.filter((o) => o.status === 'pending').length;
+  const pendingCount = useMemo(
+    () => orders.filter((order) => order.status === 'pending').length,
+    [orders],
+  );
 
   useEffect(() => {
     if (!incomingOrderNotification) return;
@@ -61,6 +72,45 @@ export default function App() {
 
     return () => window.clearTimeout(timeoutId);
   }, [incomingOrderNotification, clearIncomingOrderNotification]);
+
+  useEffect(() => {
+    let mounted = true;
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setSession(data.session ?? null);
+      setAuthLoading(false);
+      if (data.session) {
+        void refreshAll();
+      }
+    });
+
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) {
+        void refreshAll();
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.subscription.unsubscribe();
+    };
+  }, [refreshAll]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-500 text-sm font-medium">Checking staff session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <AuthGate loading={loading} />;
+  }
 
   if (loading) {
     return (
@@ -72,6 +122,10 @@ export default function App() {
       </div>
     );
   }
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
 
   return (
     <div className="min-h-dvh bg-slate-50 flex flex-col font-sans overflow-x-hidden">
@@ -89,12 +143,22 @@ export default function App() {
               </div>
               <h1 className="text-xl font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
             </div>
+            <div className="flex items-center gap-2">
             <nav className="flex space-x-2">
               <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
               <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
               <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
               <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
             </nav>
+              <button
+                type="button"
+                onClick={() => { void handleSignOut(); }}
+                className="h-10 px-3 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-semibold"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -109,11 +173,28 @@ export default function App() {
           />
         </div>
         <h1 className="text-lg font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
+        <button
+          type="button"
+          onClick={() => { void handleSignOut(); }}
+          className="ml-auto h-9 w-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center"
+          aria-label="Sign out"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 overflow-visible flex flex-col">
-        {activeTab === 'new-order' && <NewOrder menuItems={menuItems} onPlaceOrder={addOrder} pricingRule={pricingRule} />}
+        {activeTab === 'new-order' && (
+          <NewOrder
+            menuItems={menuItems}
+            onPlaceOrder={addOrder}
+            pricingRule={pricingRule}
+            orderPending={orderPending}
+            orderError={orderError}
+            onClearOrderError={clearOrderError}
+          />
+        )}
         {activeTab === 'queue' && (
           <OrderQueue
             orders={orders}
@@ -129,6 +210,8 @@ export default function App() {
             expenses={expenses}
             onAddExpense={addExpense}
             onClearData={clearData}
+            metrics={dashboardMetrics}
+            metricsLoading={dashboardMetricsLoading}
           />
         )}
         {activeTab === 'menu' && (

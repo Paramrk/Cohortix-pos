@@ -8,7 +8,13 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "lint:pos": "npm run lint",
+    "build:pos": "npm run build",
+    "lint:customer": "npm --prefix nilkanth-ice-dish-gola run lint",
+    "build:customer": "npm --prefix nilkanth-ice-dish-gola run build",
+    "lint:all": "npm run lint:pos && npm run lint:customer",
+    "build:all": "npm run build:pos && npm run build:customer"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

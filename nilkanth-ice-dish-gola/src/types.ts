@@ -28,6 +28,10 @@ export interface Order {
   paymentMethod: 'cash' | 'upi' | 'pay_later';
   paymentStatus: 'paid' | 'unpaid';
   timestamp: number;
+  businessDate?: string;
+  source?: 'pos' | 'customer';
+  clientRequestId?: string;
+  shopId?: string;
 }
 
 export interface Expense {
@@ -40,4 +44,13 @@ export interface Expense {
 export interface PricingRule {
   discountPercent: number;
   bogoEnabled: boolean;
+}
+
+export interface OrderCreateResult {
+  orderId: string;
+  orderNumber: number;
+  timestamp: number;
+  businessDate?: string;
+  source?: 'pos' | 'customer';
+  clientRequestId?: string;
 }

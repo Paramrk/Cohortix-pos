@@ -42,3 +42,9 @@ All data (Orders, Expenses, and Menu Items) is saved locally in the browser's `l
 2. Go to the **New Order** tab to start taking customer orders.
 3. Track active orders in the **Orders Queue**.
 4. Monitor your sales and add expenses in the **Dashboard**.
+
+## Deployment + Ops
+- Vercel deployment checklist: `docs/deployment-vercel.md`
+- Rollback runbook: `docs/rollback.md`
+- Supabase migration for rush-hour hardening and RLS: `supabase/migrations/20260304_rush_hour_hardening.sql`
+- Rush-hour validation checklist: `docs/test-scenarios.md`
