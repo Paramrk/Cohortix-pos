@@ -1,0 +1,5 @@
+{
+  "name": "Ice Dish POS",
+  "description": "A simple point-of-sale and order tracking app for a local ice dish shop.",
+  "requestFramePermissions": []
+}

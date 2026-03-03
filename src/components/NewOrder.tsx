@@ -1,0 +1,472 @@
+import React, { useState, useCallback } from 'react';
+import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
+import { MenuItem, CartItem, Order, GolaVariant } from '../types';
+
+interface NewOrderProps {
+  menuItems: MenuItem[];
+  onPlaceOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => void | Promise<void>;
+}
+
+const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
+
+const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
+  'Ice Cream Only': 'bg-pink-100 text-pink-700',
+  'Dry Fruit Only': 'bg-amber-100 text-amber-700',
+  'Ice Cream + Dry Fruit': 'bg-purple-100 text-purple-700',
+  'Plain': 'bg-slate-100 text-slate-600',
+};
+
+interface QtyControlProps {
+  quantity: number;
+  onAdd: () => void;
+  onRemove: () => void;
+}
+
+function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
+  return (
+    <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+      <button
+        type="button"
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
+        className="p-1.5 text-slate-600 rounded-l-lg active:bg-slate-100"
+      >
+        <Minus className="w-4 h-4" />
+      </button>
+      <span className="w-8 text-center text-sm font-bold text-slate-800">{quantity}</span>
+      <button
+        type="button"
+        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdd(); }}
+        className="p-1.5 text-slate-600 rounded-r-lg active:bg-slate-100"
+      >
+        <Plus className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+export function NewOrder({ menuItems, onPlaceOrder }: NewOrderProps) {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [customerName, setCustomerName] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'pay_later'>('cash');
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [showMobileCart, setShowMobileCart] = useState(false);
+
+  const getCartQuantity = (itemId: string, variant?: string) => {
+    const item = cart.find((i) => i.id === itemId && i.variant === variant);
+    return item ? item.quantity : 0;
+  };
+
+  const handleAdd = useCallback((item: MenuItem, variant?: string) => {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id && i.variant === variant);
+      if (existing) {
+        return prev.map((i) =>
+          i.cartItemId === existing.cartItemId ? { ...i, quantity: i.quantity + 1 } : i
+        );
+      }
+      let calculatedPrice = item.price;
+      if (variant === 'Dish' && item.dishPrice) {
+        calculatedPrice = item.dishPrice;
+      } else if (item.hasGolaVariants && item.golaVariantPrices && variant) {
+        calculatedPrice = item.golaVariantPrices[variant as GolaVariant] ?? item.price;
+      }
+      return [
+        ...prev,
+        { ...item, cartItemId: crypto.randomUUID(), quantity: 1, variant: variant as any, calculatedPrice },
+      ];
+    });
+  }, []);
+
+  const handleRemove = useCallback((item: MenuItem, variant?: string) => {
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id && i.variant === variant);
+      if (!existing) return prev;
+      if (existing.quantity === 1) {
+        return prev.filter((i) => i.cartItemId !== existing.cartItemId);
+      }
+      return prev.map((i) =>
+        i.cartItemId === existing.cartItemId ? { ...i, quantity: i.quantity - 1 } : i
+      );
+    });
+  }, []);
+
+  const removeFromCart = useCallback((cartItemId: string) => {
+    setCart((prev) => prev.filter((i) => i.cartItemId !== cartItemId));
+  }, []);
+
+  const updateQuantity = useCallback((cartItemId: string, delta: number) => {
+    setCart((prev) =>
+      prev.map((i) => {
+        if (i.cartItemId === cartItemId) {
+          const newQuantity = i.quantity + delta;
+          if (newQuantity < 1) return i;
+          return { ...i, quantity: newQuantity };
+        }
+        return i;
+      })
+    );
+  }, []);
+
+  const total = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    onPlaceOrder({
+      customerName: customerName.trim() || 'Guest',
+      items: cart,
+      total,
+      status: 'pending',
+      paymentMethod,
+      paymentStatus: paymentMethod === 'pay_later' ? 'unpaid' : 'paid',
+    });
+    setCart([]);
+    setCustomerName('');
+    setPaymentMethod('cash');
+    setShowMobileCart(false);
+  };
+
+  const categories = Array.from(new Set(menuItems.map((i) => i.category)));
+
+  const cartItemNames = Array.from(new Set(cart.map((i) => i.name)));
+  const summaryText =
+    cartItemNames.length <= 2
+      ? cartItemNames.join(', ')
+      : `${cartItemNames.slice(0, 2).join(', ')} +${cartItemNames.length - 2} more`;
+
+  const CartContent = () => (
+    <>
+      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+          <ShoppingCart className="w-5 h-5 text-indigo-600" />
+          Current Order
+        </h2>
+        <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
+          {totalItems} items
+        </span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {cart.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
+            <ShoppingCart className="w-12 h-12 opacity-20" />
+            <p>Cart is empty</p>
+          </div>
+        ) : (
+          cart.map((item) => (
+            <div key={item.cartItemId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="flex-1">
+                <div className="font-medium text-slate-800 flex items-center gap-2 flex-wrap">
+                  {item.name}
+                  {item.variant && (
+                    <span className="text-[10px] uppercase tracking-wider font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
+                      {item.variant}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-slate-500 mt-0.5">₹{item.calculatedPrice} × {item.quantity}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, -1); }}
+                    className="p-1.5 text-slate-600 rounded-l-lg active:bg-slate-100"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, 1); }}
+                    className="p-1.5 text-slate-600 rounded-r-lg active:bg-slate-100"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onPointerDown={(e) => { e.preventDefault(); removeFromCart(item.cartItemId); }}
+                  className="p-2 text-red-500 active:bg-red-50 rounded-lg"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0">
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Customer Name (Optional)"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+          />
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setPaymentMethod('cash')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'cash'
+              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            💵 Cash
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentMethod('upi')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'upi'
+              ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            📱 UPI
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentMethod('pay_later')}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors ${paymentMethod === 'pay_later'
+              ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            🕒 Later
+          </button>
+        </div>
+
+        {paymentMethod === 'upi' && (
+          <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl mb-4 shadow-sm">
+            <QrCode className="w-24 h-24 text-slate-800 mb-2" />
+            <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
+          </div>
+        )}
+
+        <div className="flex justify-between items-end mb-4 px-1">
+          <span className="text-slate-500 font-medium">Total Amount</span>
+          <span className="text-3xl font-bold text-slate-800">₹{total}</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleCheckout}
+          disabled={cart.length === 0}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98]"
+        >
+          Place Order
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col md:flex-row h-full gap-6 relative">
+      {/* Menu Section */}
+      <div className="flex-1 overflow-y-auto pr-2 pb-32 md:pb-0">
+        <h2 className="text-2xl font-bold mb-6 text-slate-800">Menu</h2>
+        <div className="space-y-8">
+          {categories.map((category) => (
+            <div key={category}>
+              <h3 className="text-lg font-bold text-slate-400 mb-4 uppercase tracking-wider">
+                {category}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {menuItems.filter((item) => item.category === category).map((item) => {
+                  const isExpanded = expandedItemId === item.id;
+
+                  // ---- Gola variants (4 options) ----
+                  if (item.hasGolaVariants) {
+                    const totalQty = GOLA_VARIANTS.reduce((s, v) => s + getCartQuantity(item.id, v), 0);
+                    return (
+                      <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all col-span-1 sm:col-span-2 lg:col-span-3 ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
+                        <div
+                          className="p-4 flex justify-between items-center cursor-pointer"
+                          onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                        >
+                          <div>
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-slate-500 text-xs font-medium mt-0.5">
+                              {GOLA_VARIANTS.map(v => `${v}: ₹${item.golaVariantPrices?.[v] ?? item.price}`).join(' · ')}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {totalQty > 0 && (
+                              <div className="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
+                                {totalQty}
+                              </div>
+                            )}
+                            <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-indigo-600' : ''}`}>
+                              <ChevronDown className="w-5 h-5" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-3 rounded-b-xl">
+                            {GOLA_VARIANTS.map((v) => {
+                              const qty = getCartQuantity(item.id, v);
+                              const price = item.golaVariantPrices?.[v] ?? item.price;
+                              return (
+                                <div key={v} className="flex justify-between items-center">
+                                  <div>
+                                    <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mb-0.5 ${GOLA_VARIANT_COLORS[v]}`}>{v}</span>
+                                    <span className="block text-xs font-medium text-slate-500">₹{price}</span>
+                                  </div>
+                                  <QuantityControl
+                                    quantity={qty}
+                                    onAdd={() => handleAdd(item, v)}
+                                    onRemove={() => handleRemove(item, v)}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // ---- Stick / Dish variants ----
+                  if (item.hasVariants) {
+                    const stickQty = getCartQuantity(item.id, 'Stick');
+                    const dishQty = getCartQuantity(item.id, 'Dish');
+                    const totalQty = stickQty + dishQty;
+
+                    return (
+                      <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
+                        <div
+                          className="p-4 flex justify-between items-center cursor-pointer"
+                          onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                        >
+                          <div>
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-slate-500 text-sm font-medium mt-0.5">₹{item.price} - ₹{item.dishPrice}</div>
+                          </div>
+                          {totalQty > 0 && !isExpanded ? (
+                            <div className="bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
+                              {totalQty}
+                            </div>
+                          ) : (
+                            <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-indigo-600' : ''}`}>
+                              <ChevronDown className="w-5 h-5" />
+                            </div>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-4 rounded-b-xl">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="block text-sm font-bold text-slate-700">Stick</span>
+                                <span className="text-xs font-medium text-slate-500">₹{item.price}</span>
+                              </div>
+                              <QuantityControl
+                                quantity={stickQty}
+                                onAdd={() => handleAdd(item, 'Stick')}
+                                onRemove={() => handleRemove(item, 'Stick')}
+                              />
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="block text-sm font-bold text-slate-700">Dish</span>
+                                <span className="text-xs font-medium text-slate-500">₹{item.dishPrice}</span>
+                              </div>
+                              <QuantityControl
+                                quantity={dishQty}
+                                onAdd={() => handleAdd(item, 'Dish')}
+                                onRemove={() => handleRemove(item, 'Dish')}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // ---- Simple item ----
+                  const qty = getCartQuantity(item.id);
+                  return (
+                    <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
+                      <div>
+                        <div className="font-bold text-slate-800">{item.name}</div>
+                        <div className="text-slate-500 text-sm font-medium mt-0.5">₹{item.price}</div>
+                      </div>
+                      <div>
+                        {qty === 0 ? (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => { e.preventDefault(); handleAdd(item); }}
+                            className="px-5 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 active:scale-95 transition-transform"
+                          >
+                            ADD
+                          </button>
+                        ) : (
+                          <QuantityControl
+                            quantity={qty}
+                            onAdd={() => handleAdd(item)}
+                            onRemove={() => handleRemove(item)}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Cart Section (Desktop) */}
+      <div className="hidden md:flex w-96 bg-white rounded-2xl shadow-sm border border-slate-200 flex-col h-[calc(100vh-8rem)] sticky top-4">
+        <CartContent />
+      </div>
+
+      {/* Mobile Bottom Cart Bar */}
+      {cart.length > 0 && !showMobileCart && (
+        <div className="md:hidden fixed bottom-[72px] left-0 right-0 p-4 z-20">
+          <div
+            className="bg-indigo-600 rounded-2xl shadow-xl p-4 flex justify-between items-center cursor-pointer active:scale-[0.98] transition-transform"
+            onClick={() => setShowMobileCart(true)}
+          >
+            <div className="text-white">
+              <div className="font-bold text-lg">{totalItems} item{totalItems > 1 ? 's' : ''}</div>
+              <div className="text-indigo-100 text-sm font-medium truncate max-w-[200px]">{summaryText}</div>
+            </div>
+            <div className="flex flex-col items-end">
+              <div className="text-white font-bold text-lg">₹{total}</div>
+              <div className="flex items-center gap-1 text-indigo-100 text-xs font-bold mt-0.5">
+                View Cart <ChevronRight className="w-3 h-3" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Cart Modal */}
+      {showMobileCart && (
+        <div className="md:hidden fixed inset-0 z-50 flex flex-col bg-white">
+          <div className="flex justify-between items-center p-4 bg-white border-b border-slate-200 shrink-0">
+            <h2 className="text-xl font-bold text-slate-800">Your Order</h2>
+            <button
+              type="button"
+              onClick={() => setShowMobileCart(false)}
+              className="p-2 bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-transform"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            <CartContent />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
