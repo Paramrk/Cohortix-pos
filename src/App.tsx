@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
@@ -48,6 +48,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const alertAudioContextRef = useRef<AudioContext | null>(null);
+  const lastPlayedOrderIdRef = useRef<string | null>(null);
   const {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
@@ -65,14 +67,72 @@ export default function App() {
     [orders],
   );
 
+  const playIncomingOrderAlert = useCallback(() => {
+    if (typeof window === 'undefined' || typeof window.AudioContext === 'undefined') {
+      return;
+    }
+
+    if (!alertAudioContextRef.current || alertAudioContextRef.current.state === 'closed') {
+      alertAudioContextRef.current = new window.AudioContext();
+    }
+
+    const context = alertAudioContextRef.current;
+    if (!context) return;
+    if (context.state === 'suspended') {
+      void context.resume().catch(() => undefined);
+    }
+
+    const startAt = context.currentTime + 0.02;
+    const pattern = [
+      { frequency: 880, duration: 0.12, offset: 0 },
+      { frequency: 660, duration: 0.11, offset: 0.15 },
+      { frequency: 988, duration: 0.18, offset: 0.3 },
+    ];
+
+    pattern.forEach(({ frequency, duration, offset }) => {
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      const toneStart = startAt + offset;
+      const toneEnd = toneStart + duration;
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(frequency, toneStart);
+
+      gain.gain.setValueAtTime(0.0001, toneStart);
+      gain.gain.exponentialRampToValueAtTime(0.11, toneStart + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
+
+      osc.connect(gain);
+      gain.connect(context.destination);
+      osc.start(toneStart);
+      osc.stop(toneEnd + 0.02);
+    });
+
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(60);
+    }
+  }, []);
+
   useEffect(() => {
     if (!incomingOrderNotification) return;
+    if (lastPlayedOrderIdRef.current !== incomingOrderNotification.id) {
+      playIncomingOrderAlert();
+      lastPlayedOrderIdRef.current = incomingOrderNotification.id;
+    }
     const timeoutId = window.setTimeout(() => {
       clearIncomingOrderNotification();
     }, 4500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [incomingOrderNotification, clearIncomingOrderNotification]);
+  }, [incomingOrderNotification, clearIncomingOrderNotification, playIncomingOrderAlert]);
+
+  useEffect(() => {
+    return () => {
+      if (alertAudioContextRef.current && alertAudioContextRef.current.state !== 'closed') {
+        void alertAudioContextRef.current.close().catch(() => undefined);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
