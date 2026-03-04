@@ -159,7 +159,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                 <img
-                  src="/public/cohortix/Logo+Name Lightheme.png"
+                  src="/cohortix/Logo+Name Lightheme.png"
                   alt="Cohortix logo"
                   className="h-8 w-auto object-contain"
                 />

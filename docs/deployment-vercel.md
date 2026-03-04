@@ -20,6 +20,7 @@ Set in both projects:
    - `get_dashboard_metrics`
 3. Verify indexes and constraints are present.
 4. Verify RLS policies are enabled on `orders`, `expenses`, `menu_items`.
+5. Verify `supabase_realtime` publication includes `public.orders` and `public.menu_items`.
 
 ## Supabase Auth/RLS Setup
 1. Create staff users in Supabase Auth.

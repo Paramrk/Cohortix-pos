@@ -155,6 +155,10 @@ function toOrder(row: Record<string, unknown>): Order {
   };
 }
 
+function isOrderForCurrentShop(order: Order) {
+  return !order.shopId || order.shopId === SHOP_ID;
+}
+
 function toExpense(row: Record<string, unknown>): Expense {
   return {
     id: String(row.id),
@@ -429,7 +433,7 @@ export function useStore() {
       .channel('pos-live-orders')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders', filter: `shop_id=eq.${SHOP_ID}` },
+        { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.id as string | undefined;
@@ -443,6 +447,7 @@ export function useStore() {
           if (!row) return;
 
           const parsed = toOrder(row);
+          if (!isOrderForCurrentShop(parsed)) return;
           if (parsed.businessDate !== getBusinessDateString()) return;
 
           if (payload.eventType === 'INSERT') {
@@ -468,6 +473,7 @@ export function useStore() {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setOrdersRealtimeConnected(true);
+          void refreshOrders();
           return;
         }
         if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
@@ -527,12 +533,11 @@ export function useStore() {
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      if (!ordersRealtimeConnected) {
-        void refreshOrders();
-      }
+      // Reconcile queue state periodically so order sync remains correct even if realtime drops events.
+      void refreshOrders();
     }, ORDER_SYNC_INTERVAL_MS);
     return () => window.clearInterval(intervalId);
-  }, [ordersRealtimeConnected, refreshOrders]);
+  }, [refreshOrders]);
 
   useEffect(() => {
     const onFocus = () => {
