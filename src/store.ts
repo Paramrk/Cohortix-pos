@@ -226,6 +226,7 @@ export function useStore() {
   const [pricingRule, setPricingRule] = useState<PricingRule>(() => readPricingRule());
   const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
   const [ordersRealtimeConnected, setOrdersRealtimeConnected] = useState(false);
+  const [ordersPermissionError, setOrdersPermissionError] = useState<string | null>(null);
   const [orderPending, setOrderPending] = useState(false);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
@@ -357,19 +358,26 @@ export function useStore() {
     }
 
     if (ordersRes.data) {
+      setOrdersPermissionError(null);
       setOrders(ordersRes.data.map((row) => toOrder(row as Record<string, unknown>)));
     } else if (isMissingColumnError(ordersRes.error, 'business_date') || isMissingColumnError(ordersRes.error, 'shop_id')) {
       // Backward compatibility path before migration is applied.
       const fallback = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
       if (fallback.data) {
         const today = getBusinessDateString();
+        setOrdersPermissionError(null);
         setOrders(
           fallback.data
             .map((row) => toOrder(row as Record<string, unknown>))
             .filter((order) => order.businessDate === today),
         );
       }
+    } else if (isPermissionError(ordersRes.error)) {
+      setOrdersPermissionError(
+        'Orders access denied. Sign in using a Supabase staff account with app_metadata.role set to staff.',
+      );
     } else if (ordersRes.error && !isPermissionError(ordersRes.error)) {
+      setOrdersPermissionError(null);
       console.error('Failed to fetch orders', ordersRes.error.code, ordersRes.error.message);
     }
 
@@ -406,6 +414,7 @@ export function useStore() {
       .order('timestamp', { ascending: false });
 
     if (!error && data) {
+      setOrdersPermissionError(null);
       setOrders(data.map((row) => toOrder(row as Record<string, unknown>)));
       return;
     }
@@ -414,6 +423,7 @@ export function useStore() {
       const fallback = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
       if (fallback.data) {
         const today = getBusinessDateString();
+        setOrdersPermissionError(null);
         setOrders(
           fallback.data
             .map((row) => toOrder(row as Record<string, unknown>))
@@ -423,7 +433,15 @@ export function useStore() {
       return;
     }
 
+    if (isPermissionError(error)) {
+      setOrdersPermissionError(
+        'Orders access denied. Sign in using a Supabase staff account with app_metadata.role set to staff.',
+      );
+      return;
+    }
+
     if (error && !isPermissionError(error)) {
+      setOrdersPermissionError(null);
       console.error('Failed to refresh orders', error.code, error.message);
     }
   }, []);
@@ -845,6 +863,7 @@ export function useStore() {
     loading,
     pricingRule,
     ordersRealtimeConnected,
+    ordersPermissionError,
     incomingOrderNotification,
     orderPending,
     orderError,

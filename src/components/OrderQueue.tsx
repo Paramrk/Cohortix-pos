@@ -5,6 +5,7 @@ import { Order } from '../types';
 interface OrderQueueProps {
   orders: Order[];
   ordersRealtimeConnected: boolean;
+  ordersPermissionError?: string | null;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
@@ -224,6 +225,7 @@ function OrderCard({
 export function OrderQueue({
   orders,
   ordersRealtimeConnected,
+  ordersPermissionError,
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
@@ -275,6 +277,11 @@ export function OrderQueue({
           {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
         </span>
       </div>
+      {ordersPermissionError && (
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {ordersPermissionError}
+        </div>
+      )}
 
       <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-2 gap-1">
         <button

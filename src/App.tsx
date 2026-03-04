@@ -47,13 +47,6 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [session, setSession] = useState<Session | null>(null);
-  const [localAuthUser, setLocalAuthUser] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('pos_local_auth_session_v1');
-    } catch {
-      return null;
-    }
-  });
   const [authLoading, setAuthLoading] = useState(true);
   const {
     orders, expenses, menuItems, loading,
@@ -62,6 +55,7 @@ export default function App() {
     incomingOrderNotification, clearIncomingOrderNotification,
     ordersRealtimeConnected, pricingRule,
     orderPending, orderError, clearOrderError,
+    ordersPermissionError,
     dashboardMetrics, dashboardMetricsLoading,
     refreshAll,
   } = useStore();
@@ -105,10 +99,10 @@ export default function App() {
   }, [refreshAll]);
 
   useEffect(() => {
-    if (session || localAuthUser) {
+    if (session) {
       void refreshAll();
     }
-  }, [localAuthUser, refreshAll, session]);
+  }, [refreshAll, session]);
 
   if (authLoading) {
     return (
@@ -121,15 +115,9 @@ export default function App() {
     );
   }
 
-  if (!session && !localAuthUser) {
+  if (!session) {
     return (
-      <AuthGate
-        loading={loading}
-        onLocalAuth={(username) => {
-          localStorage.setItem('pos_local_auth_session_v1', username);
-          setLocalAuthUser(username);
-        }}
-      />
+      <AuthGate loading={loading} />
     );
   }
 
@@ -145,8 +133,6 @@ export default function App() {
   }
 
   const handleSignOut = async () => {
-    localStorage.removeItem('pos_local_auth_session_v1');
-    setLocalAuthUser(null);
     await supabase.auth.signOut();
   };
 
@@ -222,6 +208,7 @@ export default function App() {
           <OrderQueue
             orders={orders}
             ordersRealtimeConnected={ordersRealtimeConnected}
+            ordersPermissionError={ordersPermissionError}
             onUpdateStatus={updateOrderStatus}
             onUpdatePayment={updatePayment}
             onClearPayment={clearPayment}
@@ -256,7 +243,7 @@ export default function App() {
       <footer className="hidden md:block bg-white border-t border-slate-200 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
-            src="/public/cohortix/Logo+Name Lightheme.png"
+            src="/cohortix/Logo+Name Lightheme.png"
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />

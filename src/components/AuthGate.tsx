@@ -4,14 +4,9 @@ import { supabase } from '../lib/supabase';
 
 interface AuthGateProps {
   loading: boolean;
-  onLocalAuth?: (username: string) => void;
 }
 
-const LOCAL_AUTH_USER = (import.meta.env.VITE_POS_AUTH_USER as string | undefined)?.trim();
-const LOCAL_AUTH_PASS = (import.meta.env.VITE_POS_AUTH_PASS as string | undefined)?.trim();
-const LOCAL_AUTH_ENABLED = Boolean(LOCAL_AUTH_USER && LOCAL_AUTH_PASS);
-
-export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
+export function AuthGate({ loading }: AuthGateProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -22,12 +17,7 @@ export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
     const identifier = email.trim();
     const passwordValue = password.trim();
     if (!identifier || !passwordValue) {
-      setError('Enter staff username/email and password.');
-      return;
-    }
-
-    if (LOCAL_AUTH_ENABLED && identifier === LOCAL_AUTH_USER && passwordValue === LOCAL_AUTH_PASS) {
-      onLocalAuth?.(identifier);
+      setError('Enter staff email and password.');
       return;
     }
 
@@ -40,10 +30,9 @@ export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
     setSigningIn(false);
 
     if (signInError) {
-      const hint = LOCAL_AUTH_ENABLED
-        ? 'Use local POS username/password from .env.local or a valid Supabase staff email.'
-        : 'Use a valid Supabase staff email/password.';
-      setError(`${signInError.message || 'Unable to sign in.'} ${hint}`);
+      setError(
+        `${signInError.message || 'Unable to sign in.'} Use a valid Supabase staff email/password.`,
+      );
     }
   };
 
@@ -57,13 +46,13 @@ export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
 
         <form onSubmit={handleSignIn} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Staff Email</label>
             <input
-              type="text"
+              type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Enter username or staff email"
+              placeholder="Enter staff email"
               autoComplete="username"
             />
           </div>
@@ -95,11 +84,9 @@ export function AuthGate({ loading, onLocalAuth }: AuthGateProps) {
           </button>
         </form>
 
-        {LOCAL_AUTH_ENABLED && (
-          <p className="mt-4 text-xs text-slate-500">
-            Local POS auth is enabled via <code>VITE_POS_AUTH_USER</code>/<code>VITE_POS_AUTH_PASS</code>.
-          </p>
-        )}
+        <p className="mt-4 text-xs text-slate-500">
+          Queue access requires a Supabase staff account with <code>app_metadata.role = staff</code>.
+        </p>
       </div>
     </div>
   );
