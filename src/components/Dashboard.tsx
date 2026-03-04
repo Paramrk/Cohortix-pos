@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   TrendingUp,
   TrendingDown,
-  DollarSign,
+  IndianRupee,
   Receipt,
   PlusCircle,
   AlertTriangle,
@@ -316,7 +316,7 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
         <StatCard
           title="Today's Net Profit"
           amount={todayNetProfit}
-          icon={DollarSign}
+          icon={IndianRupee}
           colorClass={todayNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}
           subtitle="Based on collected amount"
         />
