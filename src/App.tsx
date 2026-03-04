@@ -10,6 +10,7 @@ import { AuthGate } from './components/AuthGate';
 import { supabase } from './lib/supabase';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
+const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
 
 interface NavButtonProps {
   tab: Tab;
@@ -48,6 +49,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [orderAlertsEnabled, setOrderAlertsEnabled] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(ORDER_ALERTS_ENABLED_STORAGE_KEY);
+      return raw !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const alertAudioContextRef = useRef<AudioContext | null>(null);
   const lastPlayedOrderIdRef = useRef<string | null>(null);
   const {
@@ -115,6 +124,10 @@ export default function App() {
 
   useEffect(() => {
     if (!incomingOrderNotification) return;
+    if (!orderAlertsEnabled) {
+      clearIncomingOrderNotification();
+      return;
+    }
     if (lastPlayedOrderIdRef.current !== incomingOrderNotification.id) {
       playIncomingOrderAlert();
       lastPlayedOrderIdRef.current = incomingOrderNotification.id;
@@ -124,7 +137,16 @@ export default function App() {
     }, 4500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [incomingOrderNotification, clearIncomingOrderNotification, playIncomingOrderAlert]);
+  }, [incomingOrderNotification, clearIncomingOrderNotification, orderAlertsEnabled, playIncomingOrderAlert]);
+
+  const handleToggleOrderAlerts = useCallback((enabled: boolean) => {
+    setOrderAlertsEnabled(enabled);
+    try {
+      localStorage.setItem(ORDER_ALERTS_ENABLED_STORAGE_KEY, String(enabled));
+    } catch {
+      // Ignore storage failures; in-memory toggle still works.
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -205,7 +227,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                 <img
-                  src="/cohortix/Logo+Name Lightheme.png"
+                  src="/Logo+Name Lightheme.png"
                   alt="Cohortix logo"
                   className="h-8 w-auto object-contain"
                 />
@@ -236,7 +258,7 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:hidden sticky top-0 z-10 flex items-center gap-2 shadow-sm">
         <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
           <img
-            src="/cohortix/Logo+Name Lightheme.png"
+            src="/Logo+Name Lightheme.png"
             alt="Cohortix logo"
             className="h-7 w-auto object-contain"
           />
@@ -269,6 +291,8 @@ export default function App() {
             orders={orders}
             ordersRealtimeConnected={ordersRealtimeConnected}
             ordersPermissionError={ordersPermissionError}
+            orderAlertsEnabled={orderAlertsEnabled}
+            onToggleOrderAlerts={handleToggleOrderAlerts}
             onUpdateStatus={updateOrderStatus}
             onUpdatePayment={updatePayment}
             onClearPayment={clearPayment}
@@ -303,7 +327,7 @@ export default function App() {
       <footer className="hidden md:block bg-white border-t border-slate-200 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
-            src="/cohortix/Logo+Name Lightheme.png"
+            src="/Logo+Name Lightheme.png"
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />
@@ -319,7 +343,7 @@ export default function App() {
         <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
       </nav>
 
-      {incomingOrderNotification && (
+      {incomingOrderNotification && orderAlertsEnabled && (
         <button
           type="button"
           onClick={() => {

@@ -6,6 +6,8 @@ interface OrderQueueProps {
   orders: Order[];
   ordersRealtimeConnected: boolean;
   ordersPermissionError?: string | null;
+  orderAlertsEnabled: boolean;
+  onToggleOrderAlerts: (enabled: boolean) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
@@ -226,6 +228,8 @@ export function OrderQueue({
   orders,
   ordersRealtimeConnected,
   ordersPermissionError,
+  orderAlertsEnabled,
+  onToggleOrderAlerts,
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
@@ -261,7 +265,7 @@ export function OrderQueue({
 
   return (
     <div className="mobile-bottom-offset md:pb-0">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <span
           className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${
             ordersRealtimeConnected
@@ -276,6 +280,30 @@ export function OrderQueue({
           />
           {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
         </span>
+        <button
+          type="button"
+          onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
+          aria-pressed={orderAlertsEnabled}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
+            orderAlertsEnabled
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              : 'bg-slate-100 text-slate-600 border-slate-200'
+          }`}
+        >
+          <span>Order Alerts</span>
+          <span
+            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
+              orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+                orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
+          <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
+        </button>
       </div>
       {ordersPermissionError && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
