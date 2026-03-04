@@ -127,7 +127,7 @@ function OrderCard({
           {settlingOrderId === order.id ? (
             <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="flex justify-center p-2 bg-white rounded-lg border border-slate-200">
-                <QrCode className="w-24 h-24 text-slate-800" />
+                <img src="/qr.png" alt="UPI QR" className="w-56 h-56 text-slate-800 mb-2" />
               </div>
               <p className="text-center text-xs font-medium text-slate-500">Scan to pay ₹{order.total}</p>
               <p className="text-center text-[11px] text-slate-500">
@@ -267,16 +267,14 @@ export function OrderQueue({
     <div className="mobile-bottom-offset md:pb-0">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <span
-          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${
-            ordersRealtimeConnected
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-              : 'bg-amber-50 text-amber-700 border-amber-200'
-          }`}
+          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${ordersRealtimeConnected
+            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+            : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
         >
           <span
-            className={`w-2 h-2 rounded-full ${
-              ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
-            }`}
+            className={`w-2 h-2 rounded-full ${ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+              }`}
           />
           {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
         </span>
@@ -284,22 +282,19 @@ export function OrderQueue({
           type="button"
           onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
           aria-pressed={orderAlertsEnabled}
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${
-            orderAlertsEnabled
-              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-              : 'bg-slate-100 text-slate-600 border-slate-200'
-          }`}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${orderAlertsEnabled
+            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+            : 'bg-slate-100 text-slate-600 border-slate-200'
+            }`}
         >
           <span>Order Alerts</span>
           <span
-            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-              orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
-            }`}
+            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+              }`}
           >
             <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
-                orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
             />
           </span>
           <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
@@ -333,74 +328,74 @@ export function OrderQueue({
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 h-full items-start">
-      {/* Pending Orders */}
-      <div className={`flex-1 ${mobileSection === 'pending' ? 'block' : 'hidden'} md:block`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></span>
-            Preparing ({pendingOrders.length})
-          </h2>
-        </div>
-        <div className="space-y-4">
-          {pendingOrders.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-              <div className="text-4xl mb-2">🧊</div>
-              <p className="font-medium">No pending orders. Time to relax!</p>
-            </div>
-          ) : (
-            visiblePendingOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                isPending={true}
-                settlingOrderId={settlingOrderId}
-                setSettlingOrderId={setSettlingOrderId}
-                onUpdateStatus={onUpdateStatus}
-                onUpdatePayment={onUpdatePayment}
-                onClearPayment={onClearPayment}
-              />
-            ))
+        {/* Pending Orders */}
+        <div className={`flex-1 ${mobileSection === 'pending' ? 'block' : 'hidden'} md:block`}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></span>
+              Preparing ({pendingOrders.length})
+            </h2>
+          </div>
+          <div className="space-y-4">
+            {pendingOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <div className="text-4xl mb-2">🧊</div>
+                <p className="font-medium">No pending orders. Time to relax!</p>
+              </div>
+            ) : (
+              visiblePendingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isPending={true}
+                  settlingOrderId={settlingOrderId}
+                  setSettlingOrderId={setSettlingOrderId}
+                  onUpdateStatus={onUpdateStatus}
+                  onUpdatePayment={onUpdatePayment}
+                  onClearPayment={onClearPayment}
+                />
+              ))
+            )}
+          </div>
+          {shouldChunkPendingRender && visiblePendingOrders.length < pendingOrders.length && (
+            <button
+              type="button"
+              onClick={() => setPendingRenderLimit((prev) => Math.min(prev + 20, pendingOrders.length))}
+              className="mt-4 w-full min-h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-sm"
+            >
+              Load More Orders ({pendingOrders.length - visiblePendingOrders.length} remaining)
+            </button>
           )}
         </div>
-        {shouldChunkPendingRender && visiblePendingOrders.length < pendingOrders.length && (
-          <button
-            type="button"
-            onClick={() => setPendingRenderLimit((prev) => Math.min(prev + 20, pendingOrders.length))}
-            className="mt-4 w-full min-h-11 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 font-semibold text-sm"
-          >
-            Load More Orders ({pendingOrders.length - visiblePendingOrders.length} remaining)
-          </button>
-        )}
-      </div>
 
-      {/* Completed Orders */}
-      <div className={`flex-1 md:max-w-md ${mobileSection === 'completed' ? 'block' : 'hidden'} md:block`}>
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-          Recently Completed
-        </h2>
-        <div className="space-y-4">
-          {completedOrders.length === 0 ? (
-            <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-              <p className="font-medium">No completed orders yet.</p>
-            </div>
-          ) : (
-            completedOrders.map((order) => (
-              <OrderCard
-                key={order.id}
-                order={order}
-                isPending={false}
-                settlingOrderId={settlingOrderId}
-                setSettlingOrderId={setSettlingOrderId}
-                onUpdateStatus={onUpdateStatus}
-                onUpdatePayment={onUpdatePayment}
-                onClearPayment={onClearPayment}
-              />
-            ))
-          )}
+        {/* Completed Orders */}
+        <div className={`flex-1 md:max-w-md ${mobileSection === 'completed' ? 'block' : 'hidden'} md:block`}>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            Recently Completed
+          </h2>
+          <div className="space-y-4">
+            {completedOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="font-medium">No completed orders yet.</p>
+              </div>
+            ) : (
+              completedOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isPending={false}
+                  settlingOrderId={settlingOrderId}
+                  setSettlingOrderId={setSettlingOrderId}
+                  onUpdateStatus={onUpdateStatus}
+                  onUpdatePayment={onUpdatePayment}
+                  onClearPayment={onClearPayment}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
-    </div>
     </div>
   );
 }

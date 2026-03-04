@@ -34,6 +34,7 @@ interface StatCardProps {
   icon: LucideIcon;
   colorClass: string;
   subtitle?: string;
+  isCurrency?: boolean;
 }
 
 interface ExpenseTrendRow {
@@ -266,11 +267,13 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
     setExpenseAmount('');
   };
 
-  const StatCard = ({ title, amount, icon: Icon, colorClass, subtitle }: StatCardProps) => (
+  const StatCard = ({ title, amount, icon: Icon, colorClass, subtitle, isCurrency = true }: StatCardProps) => (
     <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 flex items-start justify-between gap-3">
       <div className="min-w-0">
         <p className="text-slate-500 font-medium text-sm mb-1">{title}</p>
-        <h3 className={`text-2xl sm:text-3xl font-bold ${colorClass}`}>{formatCurrency(amount)}</h3>
+        <h3 className={`text-2xl sm:text-3xl font-bold ${colorClass}`}>
+          {isCurrency ? formatCurrency(amount) : new Intl.NumberFormat('en-IN').format(Math.round(amount))}
+        </h3>
         {subtitle && <p className="text-xs text-slate-400 mt-2 break-words leading-relaxed">{subtitle}</p>}
       </div>
       <div className={`p-3 rounded-xl shrink-0 ${colorClass.replace('text-', 'bg-').replace('600', '100')}`}>
@@ -323,6 +326,7 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
           icon={ShoppingCart}
           colorClass="text-slate-700"
           subtitle={`${todaysItemsSold} items sold`}
+          isCurrency={false}
         />
         <StatCard
           title="Avg Order Value"

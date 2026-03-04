@@ -11,6 +11,7 @@ import { supabase } from './lib/supabase';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
+const COHORTIX_LOGO_SRC = `${import.meta.env.BASE_URL}cohortix/logo-name-lightheme.png`;
 
 interface NavButtonProps {
   tab: Tab;
@@ -227,7 +228,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
                 <img
-                  src="/Logo+Name Lightheme.png"
+                  src={COHORTIX_LOGO_SRC}
                   alt="Cohortix logo"
                   className="h-8 w-auto object-contain"
                 />
@@ -258,7 +259,7 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:hidden sticky top-0 z-10 flex items-center gap-2 shadow-sm">
         <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
           <img
-            src="/Logo+Name Lightheme.png"
+            src={COHORTIX_LOGO_SRC}
             alt="Cohortix logo"
             className="h-7 w-auto object-contain"
           />
@@ -327,7 +328,7 @@ export default function App() {
       <footer className="hidden md:block bg-white border-t border-slate-200 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
-            src="/Logo+Name Lightheme.png"
+            src={COHORTIX_LOGO_SRC}
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />

@@ -347,7 +347,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
 
         {paymentMethod === 'upi' && (
           <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl mb-4 shadow-sm">
-            <QrCode className="w-24 h-24 text-slate-800 mb-2" />
+            <img src="/qr.png" al="UPI QR" className="w-56 h-56 text-slate-800 mb-2" />
             <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
           </div>
         )}
