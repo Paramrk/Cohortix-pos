@@ -20,9 +20,50 @@ const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Plain': 'bg-slate-100 text-slate-600',
 };
 
-function chargedQuantityWithBuy2Get1(quantity: number) {
-  const safeQuantity = Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0;
-  return safeQuantity - Math.floor(safeQuantity / 3);
+function offerGroupSize(offerType: PricingRule['bogoType']) {
+  return offerType === 'b1g1' ? 2 : 3;
+}
+
+function offerLabel(offerType: PricingRule['bogoType']) {
+  return offerType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1';
+}
+
+function calculateOfferTotals(cart: CartItem[], pricingRule: PricingRule) {
+  const subtotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
+  if (!pricingRule.bogoEnabled) {
+    return { subtotal, subtotalAfterOffer: subtotal, offerSavings: 0, freeUnits: 0 };
+  }
+
+  const totalUnits = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const freeUnits = Math.floor(totalUnits / offerGroupSize(pricingRule.bogoType));
+  if (freeUnits <= 0) {
+    return { subtotal, subtotalAfterOffer: subtotal, offerSavings: 0, freeUnits: 0 };
+  }
+
+  const unitBuckets = new Map<number, number>();
+  for (const item of cart) {
+    const existing = unitBuckets.get(item.calculatedPrice) ?? 0;
+    unitBuckets.set(item.calculatedPrice, existing + item.quantity);
+  }
+
+  let remainingFree = freeUnits;
+  let offerSavings = 0;
+  const pricesAscending = Array.from(unitBuckets.keys()).sort((a, b) => a - b);
+  for (const unitPrice of pricesAscending) {
+    if (remainingFree <= 0) break;
+    const availableQty = unitBuckets.get(unitPrice) ?? 0;
+    if (availableQty <= 0) continue;
+    const takeQty = Math.min(availableQty, remainingFree);
+    offerSavings += unitPrice * takeQty;
+    remainingFree -= takeQty;
+  }
+
+  return {
+    subtotal,
+    subtotalAfterOffer: Math.max(0, subtotal - offerSavings),
+    offerSavings,
+    freeUnits,
+  };
 }
 
 interface QtyControlProps {
@@ -150,14 +191,10 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
     );
   }, [onClearOrderError]);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
-  const subtotalAfterBogo = cart.reduce((sum, item) => {
-    const chargedQty = pricingRule.bogoEnabled ? chargedQuantityWithBuy2Get1(item.quantity) : item.quantity;
-    return sum + item.calculatedPrice * chargedQty;
-  }, 0);
-  const bogoSavings = subtotal - subtotalAfterBogo;
-  const percentDiscountAmount = Math.round((subtotalAfterBogo * pricingRule.discountPercent) / 100);
-  const total = Math.max(0, subtotalAfterBogo - percentDiscountAmount);
+  const activeOfferLabel = offerLabel(pricingRule.bogoType);
+  const { subtotal, subtotalAfterOffer, offerSavings, freeUnits } = calculateOfferTotals(cart, pricingRule);
+  const percentDiscountAmount = Math.round((subtotalAfterOffer * pricingRule.discountPercent) / 100);
+  const total = Math.max(0, subtotalAfterOffer - percentDiscountAmount);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const handleCheckout = async () => {
@@ -228,11 +265,6 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
                 </div>
                 <div className="text-sm text-slate-500 mt-0.5">
                   ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
-                  {pricingRule.bogoEnabled && item.quantity >= 3 && (
-                    <span className="ml-2 text-emerald-700 font-semibold">
-                      (Buy 2 Get 1 charged {chargedQuantityWithBuy2Get1(item.quantity)})
-                    </span>
-                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -271,7 +303,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           <div className="mb-3 flex flex-wrap gap-2">
             {pricingRule.bogoEnabled && (
               <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-                Buy 2 Get 1 Active
+                {activeOfferLabel} Active
               </span>
             )}
             {pricingRule.discountPercent > 0 && (
@@ -364,8 +396,14 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           </div>
           {pricingRule.bogoEnabled && (
             <div className="flex justify-between text-sm text-emerald-700 font-semibold">
-              <span>Buy 2 Get 1 Savings</span>
-              <span>-₹{bogoSavings}</span>
+              <span>{activeOfferLabel} Savings</span>
+              <span>-₹{offerSavings}</span>
+            </div>
+          )}
+          {pricingRule.bogoEnabled && freeUnits > 0 && (
+            <div className="flex justify-between text-xs text-emerald-700/80 font-semibold">
+              <span>Free Items</span>
+              <span>{freeUnits}</span>
             </div>
           )}
           {pricingRule.discountPercent > 0 && (
@@ -406,7 +444,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu</h2>
           {pricingRule.bogoEnabled && (
             <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-              Buy 2 Get 1
+              {activeOfferLabel}
             </span>
           )}
           {pricingRule.discountPercent > 0 && (

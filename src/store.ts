@@ -11,6 +11,7 @@ const SHOP_ID = 'main';
 const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
   bogoEnabled: false,
+  bogoType: 'b2g1',
 };
 
 function clampDiscountPercent(value: number) {
@@ -88,9 +89,11 @@ function readPricingRule(): PricingRule {
     const raw = localStorage.getItem(PRICING_RULE_STORAGE_KEY);
     if (!raw) return DEFAULT_PRICING_RULE;
     const parsed = JSON.parse(raw) as Partial<PricingRule>;
+    const normalizedBogoType = parsed.bogoType === 'b1g1' ? 'b1g1' : 'b2g1';
     return {
       discountPercent: clampDiscountPercent(parsed.discountPercent ?? 0),
       bogoEnabled: Boolean(parsed.bogoEnabled),
+      bogoType: normalizedBogoType,
     };
   } catch {
     return DEFAULT_PRICING_RULE;
@@ -102,10 +105,19 @@ function isPricingRuleMenuRow(row: Record<string, unknown>) {
 }
 
 function pricingRuleFromMenuRow(row: Record<string, unknown>): PricingRule {
+  const modeCode = Number(row.dish_price ?? 0);
+  const bogoEnabled = modeCode > 0;
+  const bogoType = modeCode === 1 ? 'b1g1' : 'b2g1';
   return {
     discountPercent: clampDiscountPercent(Number(row.price ?? 0)),
-    bogoEnabled: Number(row.dish_price ?? 0) > 0,
+    bogoEnabled,
+    bogoType,
   };
+}
+
+function pricingRuleDishCode(rule: PricingRule) {
+  if (!rule.bogoEnabled) return 0;
+  return rule.bogoType === 'b1g1' ? 1 : 2;
 }
 
 function toMenuItem(row: Record<string, unknown>): MenuItem {
@@ -238,7 +250,7 @@ export function useStore() {
       name: PRICING_RULE_MENU_NAME,
       category: PRICING_RULE_MENU_CATEGORY,
       price: clampDiscountPercent(rule.discountPercent),
-      dish_price: rule.bogoEnabled ? 1 : 0,
+      dish_price: pricingRuleDishCode(rule),
       has_variants: false,
       has_gola_variants: false,
       gola_variant_prices: null,
@@ -248,7 +260,7 @@ export function useStore() {
       name: PRICING_RULE_MENU_NAME,
       category: PRICING_RULE_MENU_CATEGORY,
       price: clampDiscountPercent(rule.discountPercent),
-      dish_price: rule.bogoEnabled ? 1 : 0,
+      dish_price: pricingRuleDishCode(rule),
       has_variants: false,
     };
 
@@ -849,6 +861,7 @@ export function useStore() {
       const merged: PricingRule = {
         discountPercent: clampDiscountPercent(next.discountPercent ?? prev.discountPercent),
         bogoEnabled: next.bogoEnabled ?? prev.bogoEnabled,
+        bogoType: next.bogoType ?? prev.bogoType,
       };
       localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
       void persistPricingRuleToSupabase(merged);

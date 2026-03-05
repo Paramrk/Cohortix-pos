@@ -44,6 +44,7 @@ export interface Expense {
 export interface PricingRule {
   discountPercent: number;
   bogoEnabled: boolean;
+  bogoType: 'b1g1' | 'b2g1';
 }
 
 export interface OrderCreateResult {

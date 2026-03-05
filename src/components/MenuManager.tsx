@@ -149,7 +149,8 @@ export function MenuManager({
 
   const hasPricingChanges =
     pricingDraft.discountPercent !== pricingRule.discountPercent ||
-    pricingDraft.bogoEnabled !== pricingRule.bogoEnabled;
+    pricingDraft.bogoEnabled !== pricingRule.bogoEnabled ||
+    pricingDraft.bogoType !== pricingRule.bogoType;
 
   return (
     <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
@@ -171,20 +172,56 @@ export function MenuManager({
               onClick={() =>
                 setPricingDraft((prev) => ({
                   ...prev,
-                  bogoEnabled: !prev.bogoEnabled,
+                  bogoEnabled: false,
                 }))
               }
               className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
-                pricingDraft.bogoEnabled
+                !pricingDraft.bogoEnabled
+                  ? 'bg-slate-800 text-white border-slate-800'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}
+            >
+              Offer Off
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setPricingDraft((prev) => ({
+                  ...prev,
+                  bogoEnabled: true,
+                  bogoType: 'b1g1',
+                }))
+              }
+              className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
+                pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b1g1'
                   ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                   : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
             >
-              {pricingDraft.bogoEnabled ? 'Buy 2 Get 1 ON' : 'Buy 2 Get 1 OFF'}
+              Buy 1 Get 1
             </button>
             <button
               type="button"
-              onClick={() => setPricingDraft({ discountPercent: 0, bogoEnabled: false })}
+              onClick={() =>
+                setPricingDraft((prev) => ({
+                  ...prev,
+                  bogoEnabled: true,
+                  bogoType: 'b2g1',
+                }))
+              }
+              className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${
+                pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b2g1'
+                  ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+              }`}
+            >
+              Buy 2 Get 1
+            </button>
+          </div>
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+            <button
+              type="button"
+              onClick={() => setPricingDraft({ discountPercent: 0, bogoEnabled: false, bogoType: 'b2g1' })}
               className="px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
             >
               Reset Offers
@@ -231,10 +268,10 @@ export function MenuManager({
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-2">
-            Live: {pricingRule.discountPercent}% off {pricingRule.bogoEnabled ? '+ Buy 2 Get 1 enabled' : ''}
+            Live: {pricingRule.discountPercent}% off {pricingRule.bogoEnabled ? `+ ${pricingRule.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            Draft: {pricingDraft.discountPercent}% off {pricingDraft.bogoEnabled ? '+ Buy 2 Get 1 enabled' : ''}
+            Draft: {pricingDraft.discountPercent}% off {pricingDraft.bogoEnabled ? `+ ${pricingDraft.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
           </p>
         </div>
       </div>
