@@ -180,7 +180,7 @@ export function MenuManager({
                   : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
             >
-              {pricingDraft.bogoEnabled ? 'BOGO ON' : 'BOGO OFF'}
+              {pricingDraft.bogoEnabled ? 'Buy 2 Get 1 ON' : 'Buy 2 Get 1 OFF'}
             </button>
             <button
               type="button"
@@ -231,10 +231,10 @@ export function MenuManager({
             </div>
           </div>
           <p className="text-xs text-slate-500 mt-2">
-            Live: {pricingRule.discountPercent}% off {pricingRule.bogoEnabled ? '+ BOGO enabled' : ''}
+            Live: {pricingRule.discountPercent}% off {pricingRule.bogoEnabled ? '+ Buy 2 Get 1 enabled' : ''}
           </p>
           <p className="text-xs text-slate-500 mt-1">
-            Draft: {pricingDraft.discountPercent}% off {pricingDraft.bogoEnabled ? '+ BOGO enabled' : ''}
+            Draft: {pricingDraft.discountPercent}% off {pricingDraft.bogoEnabled ? '+ Buy 2 Get 1 enabled' : ''}
           </p>
         </div>
       </div>

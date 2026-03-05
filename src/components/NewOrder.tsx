@@ -20,6 +20,11 @@ const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Plain': 'bg-slate-100 text-slate-600',
 };
 
+function chargedQuantityWithBuy2Get1(quantity: number) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0;
+  return safeQuantity - Math.floor(safeQuantity / 3);
+}
+
 interface QtyControlProps {
   quantity: number;
   onAdd: () => void;
@@ -147,7 +152,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
 
   const subtotal = cart.reduce((sum, item) => sum + item.calculatedPrice * item.quantity, 0);
   const subtotalAfterBogo = cart.reduce((sum, item) => {
-    const chargedQty = pricingRule.bogoEnabled ? Math.ceil(item.quantity / 2) : item.quantity;
+    const chargedQty = pricingRule.bogoEnabled ? chargedQuantityWithBuy2Get1(item.quantity) : item.quantity;
     return sum + item.calculatedPrice * chargedQty;
   }, 0);
   const bogoSavings = subtotal - subtotalAfterBogo;
@@ -223,9 +228,9 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
                 </div>
                 <div className="text-sm text-slate-500 mt-0.5">
                   ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
-                  {pricingRule.bogoEnabled && item.quantity >= 2 && (
+                  {pricingRule.bogoEnabled && item.quantity >= 3 && (
                     <span className="ml-2 text-emerald-700 font-semibold">
-                      (BOGO charged {Math.ceil(item.quantity / 2)})
+                      (Buy 2 Get 1 charged {chargedQuantityWithBuy2Get1(item.quantity)})
                     </span>
                   )}
                 </div>
@@ -266,7 +271,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           <div className="mb-3 flex flex-wrap gap-2">
             {pricingRule.bogoEnabled && (
               <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-                Buy 1 Get 1 Active
+                Buy 2 Get 1 Active
               </span>
             )}
             {pricingRule.discountPercent > 0 && (
@@ -359,7 +364,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           </div>
           {pricingRule.bogoEnabled && (
             <div className="flex justify-between text-sm text-emerald-700 font-semibold">
-              <span>BOGO Savings</span>
+              <span>Buy 2 Get 1 Savings</span>
               <span>-₹{bogoSavings}</span>
             </div>
           )}
@@ -401,7 +406,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu</h2>
           {pricingRule.bogoEnabled && (
             <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-              Buy 1 Get 1
+              Buy 2 Get 1
             </span>
           )}
           {pricingRule.discountPercent > 0 && (
