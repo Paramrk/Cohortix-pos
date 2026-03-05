@@ -20,6 +20,11 @@ const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Plain': 'bg-slate-100 text-slate-600',
 };
 
+function isStickRestrictedCategory(category: string) {
+  const normalized = category.trim().toLowerCase();
+  return normalized === 'special' || normalized === 'pyali';
+}
+
 function offerGroupSize(offerType: PricingRule['bogoType']) {
   return offerType === 'b1g1' ? 2 : 3;
 }
@@ -139,21 +144,22 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
   const handleAdd = useCallback((item: MenuItem, variant?: string) => {
     onClearOrderError();
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id && i.variant === variant);
+      const safeVariant = variant === 'Stick' && isStickRestrictedCategory(item.category) ? 'Dish' : variant;
+      const existing = prev.find((i) => i.id === item.id && i.variant === safeVariant);
       if (existing) {
         return prev.map((i) =>
           i.cartItemId === existing.cartItemId ? { ...i, quantity: i.quantity + 1 } : i
         );
       }
       let calculatedPrice = item.price;
-      if (variant === 'Dish' && item.dishPrice) {
+      if (safeVariant === 'Dish' && item.dishPrice) {
         calculatedPrice = item.dishPrice;
-      } else if (item.hasGolaVariants && item.golaVariantPrices && variant) {
-        calculatedPrice = item.golaVariantPrices[variant as GolaVariant] ?? item.price;
+      } else if (item.hasGolaVariants && item.golaVariantPrices && safeVariant) {
+        calculatedPrice = item.golaVariantPrices[safeVariant as GolaVariant] ?? item.price;
       }
       return [
         ...prev,
-        { ...item, cartItemId: crypto.randomUUID(), quantity: 1, variant: variant as any, calculatedPrice },
+        { ...item, cartItemId: crypto.randomUUID(), quantity: 1, variant: safeVariant as any, calculatedPrice },
       ];
     });
   }, [onClearOrderError]);
@@ -161,7 +167,8 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
   const handleRemove = useCallback((item: MenuItem, variant?: string) => {
     onClearOrderError();
     setCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id && i.variant === variant);
+      const safeVariant = variant === 'Stick' && isStickRestrictedCategory(item.category) ? 'Dish' : variant;
+      const existing = prev.find((i) => i.id === item.id && i.variant === safeVariant);
       if (!existing) return prev;
       if (existing.quantity === 1) {
         return prev.filter((i) => i.cartItemId !== existing.cartItemId);
@@ -517,9 +524,11 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
 
                   // ---- Stick / Dish variants ----
                   if (item.hasVariants) {
+                    const stickAllowed = !isStickRestrictedCategory(item.category);
                     const stickQty = getCartQuantity(item.id, 'Stick');
                     const dishQty = getCartQuantity(item.id, 'Dish');
-                    const totalQty = stickQty + dishQty;
+                    const totalQty = stickAllowed ? stickQty + dishQty : dishQty;
+                    const dishOnlyPrice = item.dishPrice ?? item.price;
 
                     return (
                       <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
@@ -530,7 +539,9 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
                           <div>
                             <div className="font-bold text-slate-800">{item.name}</div>
                             <div className="text-slate-500 text-sm font-medium mt-0.5">
-                              ₹{discountUnitPrice(item.price)} - ₹{item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}
+                              {stickAllowed
+                                ? `₹${discountUnitPrice(item.price)} - ₹${item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}`
+                                : `₹${discountUnitPrice(dishOnlyPrice)}`}
                             </div>
                           </div>
                           {totalQty > 0 && !isExpanded ? (
@@ -546,22 +557,24 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
 
                         {isExpanded && (
                           <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-4 rounded-b-xl">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="block text-sm font-bold text-slate-700">Stick</span>
-                                <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
+                            {stickAllowed && (
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <span className="block text-sm font-bold text-slate-700">Stick</span>
+                                  <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
+                                </div>
+                                <QuantityControl
+                                  quantity={stickQty}
+                                  onAdd={() => handleAdd(item, 'Stick')}
+                                  onRemove={() => handleRemove(item, 'Stick')}
+                                />
                               </div>
-                              <QuantityControl
-                                quantity={stickQty}
-                                onAdd={() => handleAdd(item, 'Stick')}
-                                onRemove={() => handleRemove(item, 'Stick')}
-                              />
-                            </div>
+                            )}
                             <div className="flex justify-between items-center">
                               <div>
                                 <span className="block text-sm font-bold text-slate-700">Dish</span>
                                 <span className="text-xs font-medium text-slate-500">
-                                  {item.dishPrice ? `₹${discountUnitPrice(item.dishPrice)}` : '—'}
+                                  ₹{discountUnitPrice(dishOnlyPrice)}
                                 </span>
                               </div>
                               <QuantityControl

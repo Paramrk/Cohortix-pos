@@ -22,6 +22,11 @@ const CATEGORY_ICONS: Record<Category, string> = {
   Pyali: '🍧',
 };
 
+function isStickRestrictedCategory(category: string) {
+  const normalized = category.trim().toLowerCase();
+  return normalized === 'special' || normalized === 'pyali';
+}
+
 interface FormState {
   name: string;
   category: string;
@@ -44,29 +49,39 @@ const defaultForm = (): FormState => ({
 });
 
 function formToMenuItem(f: FormState): Omit<MenuItem, 'id'> {
-  const hasStickDish = f.stickPrice > 0 || f.dishPrice > 0;
+  const stickAllowed = !isStickRestrictedCategory(f.category);
   const hasGola = GOLA_VARIANTS.some((v) => f.golaVariantPrices[v] > 0);
+  const normalizedStickPrice = stickAllowed ? f.stickPrice : 0;
+  const normalizedDishPrice = hasGola ? undefined : (f.dishPrice > 0 ? f.dishPrice : undefined);
+  const hasStickDish = normalizedStickPrice > 0 || (normalizedDishPrice ?? 0) > 0;
+  const basePrice = hasGola
+    ? f.golaVariantPrices['Plain']
+    : normalizedStickPrice > 0
+      ? normalizedStickPrice
+      : (normalizedDishPrice ?? 0);
 
-  // If it has Gola Variants, dishPreis should be undefined to avoid mapping issues
-  const clearDishPrice = hasGola ? undefined : (f.dishPrice || undefined);
+  // If it has Gola Variants, dishPrice should be undefined to avoid mapping issues.
+  const clearDishPrice = normalizedDishPrice;
 
   return {
     name: f.name.trim(),
-    price: f.stickPrice || (hasGola ? f.golaVariantPrices['Plain'] : 0),
+    price: basePrice,
     dishPrice: clearDishPrice,
     category: f.category,
-    hasVariants: (hasStickDish || hasGola), // any item with extra forms is considered hasVariants going forward, wait let's follow DB rules:
+    hasVariants: hasStickDish || hasGola,
     hasGolaVariants: hasGola,
     golaVariantPrices: hasGola ? { ...f.golaVariantPrices } : undefined,
   };
 }
 
 function menuItemToForm(item: MenuItem): FormState {
+  const stickAllowed = !isStickRestrictedCategory(item.category);
+  const fallbackDishPrice = item.hasGolaVariants ? 0 : (!stickAllowed ? item.price : 0);
   return {
     name: item.name,
     category: item.category,
-    stickPrice: item.price,
-    dishPrice: item.dishPrice || 0,
+    stickPrice: stickAllowed ? item.price : 0,
+    dishPrice: item.dishPrice || fallbackDishPrice,
     golaVariantPrices: item.golaVariantPrices ?? {
       'Ice Cream Only': 0,
       'Dry Fruit Only': 0,
@@ -100,9 +115,10 @@ export function MenuManager({
 
   const hasGolaPrices = GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);
   const hasDishPrice = form.dishPrice > 0;
+  const stickAllowed = !isStickRestrictedCategory(form.category);
 
   const atLeastOnePrice =
-    form.stickPrice > 0 ||
+    (stickAllowed && form.stickPrice > 0) ||
     form.dishPrice > 0 ||
     GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);
 
@@ -305,7 +321,15 @@ export function MenuManager({
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => setForm({ ...form, category: cat })}
+                  onClick={() =>
+                    setForm((prev) => {
+                      if (isStickRestrictedCategory(cat)) {
+                        const migratedDishPrice = prev.dishPrice > 0 ? prev.dishPrice : prev.stickPrice;
+                        return { ...prev, category: cat, dishPrice: migratedDishPrice, stickPrice: 0 };
+                      }
+                      return { ...prev, category: cat };
+                    })
+                  }
                   className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${form.category === cat
                     ? 'bg-indigo-100 text-indigo-800 border-indigo-500'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
@@ -328,20 +352,24 @@ export function MenuManager({
               {/* Stick / Dish row */}
               <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center gap-2">
                 <span className="text-base">🍡</span>
-                <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">Stick / Dish</span>
+                <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">
+                  {stickAllowed ? 'Stick / Dish' : 'Dish Only'}
+                </span>
               </div>
-              <div className="grid grid-cols-1 min-[375px]:grid-cols-2 gap-px bg-slate-200">
-                <div className="bg-white p-4">
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Stick Price (₹)</label>
-                  <input
-                    type="number"
-                    value={form.stickPrice || ''}
-                    onChange={(e) => setForm({ ...form, stickPrice: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                    min="0"
-                    placeholder="₹0"
-                  />
-                </div>
+              <div className={`grid gap-px bg-slate-200 ${stickAllowed ? 'grid-cols-1 min-[375px]:grid-cols-2' : 'grid-cols-1'}`}>
+                {stickAllowed && (
+                  <div className="bg-white p-4">
+                    <label className="block text-xs font-bold text-slate-500 mb-1">Stick Price (₹)</label>
+                    <input
+                      type="number"
+                      value={form.stickPrice || ''}
+                      onChange={(e) => setForm({ ...form, stickPrice: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                      min="0"
+                      placeholder="₹0"
+                    />
+                  </div>
+                )}
                 <div className={`bg-white p-4 transition-opacity ${hasGolaPrices ? 'opacity-30 pointer-events-none' : ''}`}>
                   <label className="block text-xs font-bold text-slate-500 mb-1">
                     Dish Price (₹) {hasGolaPrices && <span className="text-[10px] text-rose-500 ml-1 font-normal">(Hidden by Gola Variants)</span>}
@@ -451,8 +479,10 @@ export function MenuManager({
                       <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                         {item.hasVariants && (
                           <>
-                            {item.price > 0 && <span>🍡 Stick: ₹{item.price}</span>}
-                            {item.dishPrice && item.dishPrice > 0 && <span>🥣 Dish: ₹{item.dishPrice}</span>}
+                            {!isStickRestrictedCategory(item.category) && item.price > 0 && <span>🍡 Stick: ₹{item.price}</span>}
+                            {((item.dishPrice && item.dishPrice > 0) || isStickRestrictedCategory(item.category)) && (
+                              <span>🥣 Dish: ₹{item.dishPrice && item.dishPrice > 0 ? item.dishPrice : item.price}</span>
+                            )}
                           </>
                         )}
                         {item.hasGolaVariants && item.golaVariantPrices &&
