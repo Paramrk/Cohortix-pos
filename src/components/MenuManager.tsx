@@ -81,8 +81,8 @@ function menuItemToForm(item: MenuItem): FormState {
     name: item.name,
     category: item.category,
     stickPrice: stickAllowed ? item.price : 0,
-    dishPrice: item.dishPrice || fallbackDishPrice,
-    golaVariantPrices: item.golaVariantPrices ?? {
+    dishPrice: item.hasGolaVariants ? 0 : (item.dishPrice || fallbackDishPrice),
+    golaVariantPrices: item.hasGolaVariants && item.golaVariantPrices ? item.golaVariantPrices : {
       'Ice Cream Only': 0,
       'Dry Fruit Only': 0,
       'Ice Cream + Dry Fruit': 0,
