@@ -130,6 +130,7 @@ function toMenuItem(row: Record<string, unknown>): MenuItem {
     hasVariants: Boolean(row.has_variants) || false,
     hasGolaVariants: Boolean(row.has_gola_variants) || false,
     golaVariantPrices: row.gola_variant_prices ? (row.gola_variant_prices as any) : undefined,
+    defaultGolaVariant: row.default_gola_variant ? (row.default_gola_variant as any) : undefined,
   };
 }
 
@@ -230,6 +231,13 @@ function isPermissionError(error: { code?: string; message?: string } | null) {
   return message.includes('permission denied') || message.includes('row-level security');
 }
 
+function menuWriteErrorMessage(error: { code?: string; message?: string } | null) {
+  if (isPermissionError(error)) {
+    return 'Menu/offer update denied. Use a permitted account and try again.';
+  }
+  return error?.message || 'Failed to update menu/offer.';
+}
+
 export function useStore() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -246,6 +254,8 @@ export function useStore() {
   const localInsertRequestIdsRef = useRef<Map<string, number>>(new Map());
 
   const persistPricingRuleToSupabase = useCallback(async (rule: PricingRule) => {
+    await supabase.auth.refreshSession().catch(() => undefined);
+
     const rowWithGola = {
       name: PRICING_RULE_MENU_NAME,
       category: PRICING_RULE_MENU_CATEGORY,
@@ -264,42 +274,66 @@ export function useStore() {
       has_variants: false,
     };
 
-    let query = supabase
+    // 1. Look up the pricing rule row WITHOUT shop_id filter first
+    const { data: existingRows, error: selectError } = await supabase
       .from('menu_items')
       .select('id')
       .eq('name', PRICING_RULE_MENU_NAME)
       .eq('category', PRICING_RULE_MENU_CATEGORY)
       .limit(1);
 
-    const withShopId = await query.eq('shop_id', SHOP_ID);
-    const existingRows = (withShopId.data ?? []).length > 0 || !isMissingColumnError(withShopId.error, 'shop_id')
-      ? withShopId.data
-      : (await supabase
-          .from('menu_items')
-          .select('id')
-          .eq('name', PRICING_RULE_MENU_NAME)
-          .eq('category', PRICING_RULE_MENU_CATEGORY)
-          .limit(1)).data;
+    if (selectError) {
+      console.error('Failed to query existing pricing rule:', selectError);
+      throw new Error(menuWriteErrorMessage(selectError));
+    }
 
     const existingId = existingRows?.[0]?.id as string | undefined;
 
     if (existingId) {
-      let { error } = await supabase.from('menu_items').update(rowWithGola).eq('id', existingId);
-      if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants') || isMissingColumnError(error, 'shop_id')) {
-        ({ error } = await supabase.from('menu_items').update(rowLegacy).eq('id', existingId));
-      }
-      if (error) {
-        console.error('Failed to persist pricing rule', error.code, error.message);
+      // Update logic — use count to detect silent RLS blocks (0 rows = permission denied)
+      let { error: updateError, count: updateCount } = await supabase
+        .from('menu_items')
+        .update(rowWithGola)
+        .eq('id', existingId)
+        .select('id');
+
+      if (updateError && (isMissingColumnError(updateError, 'gola_variant_prices') || isMissingColumnError(updateError, 'has_gola_variants') || isMissingColumnError(updateError, 'shop_id'))) {
+        // Fallback update for older schema
+        const { error: legacyUpdateError, data: legacyData } = await supabase
+          .from('menu_items')
+          .update(rowLegacy)
+          .eq('id', existingId)
+          .select('id');
+        if (legacyUpdateError) {
+          console.error('[persistPricingRule] legacy update error:', legacyUpdateError.code, legacyUpdateError.message);
+          throw new Error(menuWriteErrorMessage(legacyUpdateError));
+        }
+        if (!legacyData || legacyData.length === 0) {
+          console.error('[persistPricingRule] 0 rows updated - RLS blocked write. is_staff() returned false. Sign out and sign back in.');
+          throw new Error('Offer update denied. Please sign out and sign back in to refresh permissions.');
+        }
+      } else if (updateError) {
+        console.error('[persistPricingRule] update error:', updateError.code, updateError.message);
+        throw new Error(menuWriteErrorMessage(updateError));
+      } else if (!updateCount && updateCount !== null) {
+        // Sanity check when count returned
       }
       return;
     }
 
-    let { error } = await supabase.from('menu_items').insert(rowWithGola);
-    if (isMissingColumnError(error, 'gola_variant_prices') || isMissingColumnError(error, 'has_gola_variants') || isMissingColumnError(error, 'shop_id')) {
-      ({ error } = await supabase.from('menu_items').insert(rowLegacy));
-    }
-    if (error) {
-      console.error('Failed to insert pricing rule row', error.code, error.message);
+    // Insert logic
+    let { error: insertError } = await supabase.from('menu_items').insert(rowWithGola);
+
+    if (insertError && (isMissingColumnError(insertError, 'gola_variant_prices') || isMissingColumnError(insertError, 'has_gola_variants') || isMissingColumnError(insertError, 'shop_id'))) {
+      // Fallback insert for older schema
+      const { error: legacyInsertError } = await supabase.from('menu_items').insert(rowLegacy);
+      if (legacyInsertError) {
+        console.error('Failed to insert pricing rule with legacy schema:', legacyInsertError);
+        throw new Error(menuWriteErrorMessage(legacyInsertError));
+      }
+    } else if (insertError) {
+      console.error('Failed to insert pricing rule:', insertError);
+      throw new Error(menuWriteErrorMessage(insertError));
     }
   }, []);
 
@@ -353,6 +387,13 @@ export function useStore() {
     if (isMissingColumnError(menuRes.error, 'shop_id')) {
       const fallback = await supabase.from('menu_items').select('*').order('created_at');
       menuData = fallback.data;
+    }
+    if (!menuRes.error && menuData && menuData.length === 0) {
+      // Compatibility fallback: existing rows may not be backfilled with shop_id yet.
+      const fallback = await supabase.from('menu_items').select('*').order('created_at');
+      if (!fallback.error && fallback.data && fallback.data.length > 0) {
+        menuData = fallback.data;
+      }
     }
 
     if (menuData) {
@@ -517,7 +558,7 @@ export function useStore() {
       .channel('pos-live-menu')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'menu_items', filter: `shop_id=eq.${SHOP_ID}` },
+        { event: '*', schema: 'public', table: 'menu_items' },
         (payload) => {
           if (payload.eventType === 'DELETE') {
             const deletedId = payload.old?.id as string | undefined;
@@ -702,11 +743,11 @@ export function useStore() {
         prev.map((o) =>
           o.id === id
             ? {
-                ...o,
-                paymentMethod: 'pay_later',
-                paymentStatus: 'unpaid',
-                total: safeAmount ?? o.total,
-              }
+              ...o,
+              paymentMethod: 'pay_later',
+              paymentStatus: 'unpaid',
+              total: safeAmount ?? o.total,
+            }
             : o,
         ),
       );
@@ -741,19 +782,22 @@ export function useStore() {
   }, [refreshDashboardMetrics]);
 
   const addMenuItem = useCallback(async (item: Omit<MenuItem, 'id'>) => {
+    await supabase.auth.refreshSession().catch(() => undefined);
+
     const rowWithGola = {
       name: item.name,
-      price: item.hasGolaVariants ? (item.golaVariantPrices?.Plain ?? item.price) : item.price,
+      price: item.price,
       dish_price: item.dishPrice ?? null,
       category: item.category,
       has_variants: item.hasVariants ?? false,
       has_gola_variants: item.hasGolaVariants ?? false,
       gola_variant_prices: item.hasGolaVariants ? item.golaVariantPrices ?? null : null,
+      default_gola_variant: item.hasGolaVariants ? item.defaultGolaVariant ?? 'Plain' : null,
       shop_id: SHOP_ID,
     };
     const rowLegacy = {
       name: item.name,
-      price: item.hasGolaVariants ? (item.golaVariantPrices?.Plain ?? item.price) : item.price,
+      price: item.price,
       dish_price: item.dishPrice ?? null,
       category: item.category,
       has_variants: item.hasVariants ?? false,
@@ -769,44 +813,58 @@ export function useStore() {
     }
 
     if (error) throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
-    if (data) {
-      setMenuItems((prev) => [...prev, toMenuItem(data)]);
-    }
+    if (!data) throw new Error('Menu item was not created. Please try again.');
+    setMenuItems((prev) => [...prev, toMenuItem(data)]);
   }, []);
 
   const updateMenuItem = useCallback(async (id: string, updatedItem: Omit<MenuItem, 'id'>) => {
+    await supabase.auth.refreshSession().catch(() => undefined);
+
     const rowWithGola = {
       name: updatedItem.name,
-      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.Plain ?? updatedItem.price) : updatedItem.price,
+      price: updatedItem.price,
       dish_price: updatedItem.dishPrice ?? null,
       category: updatedItem.category,
       has_variants: updatedItem.hasVariants ?? false,
       has_gola_variants: updatedItem.hasGolaVariants ?? false,
       gola_variant_prices: updatedItem.hasGolaVariants ? updatedItem.golaVariantPrices ?? null : null,
+      default_gola_variant: updatedItem.hasGolaVariants ? updatedItem.defaultGolaVariant ?? 'Plain' : null,
       shop_id: SHOP_ID,
     };
     const rowLegacy = {
       name: updatedItem.name,
-      price: updatedItem.hasGolaVariants ? (updatedItem.golaVariantPrices?.Plain ?? updatedItem.price) : updatedItem.price,
+      price: updatedItem.price,
       dish_price: updatedItem.dishPrice ?? null,
       category: updatedItem.category,
       has_variants: updatedItem.hasVariants ?? false,
     };
 
-    let { error } = await supabase.from('menu_items').update(rowWithGola).eq('id', id);
+    let { error } = await supabase
+      .from('menu_items')
+      .update(rowWithGola)
+      .eq('id', id);
     if (
       isMissingColumnError(error, 'gola_variant_prices') ||
       isMissingColumnError(error, 'has_gola_variants') ||
       isMissingColumnError(error, 'shop_id')
     ) {
-      ({ error } = await supabase.from('menu_items').update(rowLegacy).eq('id', id));
+      ({ error } = await supabase
+        .from('menu_items')
+        .update(rowLegacy)
+        .eq('id', id));
     }
 
-    if (error) throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
-    setMenuItems((prev) => prev.map((m) => (m.id === id ? { ...updatedItem, id } : m)));
+    if (error) {
+      console.error('[updateMenuItem] error:', error.code, error.message);
+      throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
+    }
+    // Optimistically apply the change locally; realtime will confirm it.
+    setMenuItems((prev) => upsertMenuItem(prev, { id, ...updatedItem }));
   }, []);
 
   const deleteMenuItem = useCallback(async (id: string) => {
+    await supabase.auth.refreshSession().catch(() => undefined);
+
     const { error } = await supabase.from('menu_items').delete().eq('id', id);
     if (!error) {
       setMenuItems((prev) => prev.filter((m) => m.id !== id));
@@ -856,18 +914,16 @@ export function useStore() {
     setOrderError(null);
   }, []);
 
-  const updatePricingRule = useCallback((next: Partial<PricingRule>) => {
-    setPricingRule((prev) => {
-      const merged: PricingRule = {
-        discountPercent: clampDiscountPercent(next.discountPercent ?? prev.discountPercent),
-        bogoEnabled: next.bogoEnabled ?? prev.bogoEnabled,
-        bogoType: next.bogoType ?? prev.bogoType,
-      };
-      localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
-      void persistPricingRuleToSupabase(merged);
-      return merged;
-    });
-  }, [persistPricingRuleToSupabase]);
+  const updatePricingRule = useCallback(async (next: Partial<PricingRule>) => {
+    const merged: PricingRule = {
+      discountPercent: clampDiscountPercent(next.discountPercent !== undefined ? next.discountPercent : pricingRule.discountPercent),
+      bogoEnabled: next.bogoEnabled !== undefined ? next.bogoEnabled : pricingRule.bogoEnabled,
+      bogoType: next.bogoType !== undefined ? next.bogoType : pricingRule.bogoType,
+    };
+    await persistPricingRuleToSupabase(merged);
+    localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
+    setPricingRule(merged);
+  }, [persistPricingRuleToSupabase, pricingRule]);
 
   return {
     menuItems,

@@ -9,6 +9,7 @@ export interface MenuItem {
   hasVariants?: boolean;
   hasGolaVariants?: boolean;
   golaVariantPrices?: Record<GolaVariant, number>;
+  defaultGolaVariant?: GolaVariant;
 }
 
 export interface CartItem extends MenuItem {
