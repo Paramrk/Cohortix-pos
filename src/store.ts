@@ -862,6 +862,39 @@ export function useStore() {
     setMenuItems((prev) => upsertMenuItem(prev, { id, ...updatedItem }));
   }, []);
 
+  const renameMenuCategory = useCallback(async (currentCategory: string, nextCategory: string) => {
+    const from = currentCategory.trim();
+    const to = nextCategory.trim();
+
+    if (!from || !to || from === to) {
+      return;
+    }
+
+    await supabase.auth.refreshSession().catch(() => undefined);
+
+    let { error } = await supabase
+      .from('menu_items')
+      .update({ category: to })
+      .eq('category', from)
+      .eq('shop_id', SHOP_ID);
+
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ error } = await supabase
+        .from('menu_items')
+        .update({ category: to })
+        .eq('category', from));
+    }
+
+    if (error) {
+      console.error('[renameMenuCategory] error:', error.code, error.message);
+      throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
+    }
+
+    setMenuItems((prev) =>
+      prev.map((item) => (item.category === from ? { ...item, category: to } : item)),
+    );
+  }, []);
+
   const deleteMenuItem = useCallback(async (id: string) => {
     await supabase.auth.refreshSession().catch(() => undefined);
 
@@ -947,6 +980,7 @@ export function useStore() {
     clearData,
     addMenuItem,
     updateMenuItem,
+    renameMenuCategory,
     deleteMenuItem,
     clearIncomingOrderNotification,
     clearOrderError,

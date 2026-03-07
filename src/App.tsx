@@ -63,7 +63,7 @@ export default function App() {
   const {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
-    addMenuItem, updateMenuItem, deleteMenuItem, updatePricingRule,
+    addMenuItem, updateMenuItem, renameMenuCategory, deleteMenuItem, updatePricingRule,
     incomingOrderNotification, clearIncomingOrderNotification,
     ordersRealtimeConnected, pricingRule,
     orderPending, orderError, clearOrderError,
@@ -317,6 +317,9 @@ export default function App() {
             }}
             onUpdate={async (id, item) => {
               await updateMenuItem(id, item);
+            }}
+            onRenameCategory={async (currentName, nextName) => {
+              await renameMenuCategory(currentName, nextName);
             }}
             onDelete={deleteMenuItem}
             pricingRule={pricingRule}

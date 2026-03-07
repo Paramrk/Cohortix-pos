@@ -7,6 +7,7 @@ interface MenuManagerProps {
   menuItems: MenuItem[];
   onAdd: (item: Omit<MenuItem, 'id'>) => Promise<void>;
   onUpdate: (id: string, item: Omit<MenuItem, 'id'>) => Promise<void>;
+  onRenameCategory: (currentName: string, nextName: string) => Promise<void>;
   onDelete: (id: string) => void;
   pricingRule: PricingRule;
   onUpdatePricingRule: (next: Partial<PricingRule>) => Promise<void>;
@@ -14,13 +15,14 @@ interface MenuManagerProps {
 
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
 
-const CATEGORIES = ['Regular', 'Special', 'Pyali'] as const;
-type Category = typeof CATEGORIES[number];
+const DEFAULT_CATEGORIES = ['Regular', 'Special Dish', 'Pyali'] as const;
 
-const CATEGORY_ICONS: Record<Category, string> = {
-  Regular: '🍡',
-  Special: '⭐',
-  Pyali: '🍧',
+const CATEGORY_ICONS: Record<string, string> = {
+  Regular: '\u{1F361}',
+  Special: '\u2B50',
+  'Special Dish': '\u2B50',
+  Pyali: '\u{1F367}',
+  Pyaali: '\u{1F367}',
 };
 
 interface FormState {
@@ -34,7 +36,7 @@ interface FormState {
 
 const defaultForm = (): FormState => ({
   name: '',
-  category: 'Regular',
+  category: DEFAULT_CATEGORIES[0],
   stickPrice: 0,
   dishPrice: 0,
   golaVariantPrices: {
@@ -95,6 +97,7 @@ export function MenuManager({
   menuItems,
   onAdd,
   onUpdate,
+  onRenameCategory,
   onDelete,
   pricingRule,
   onUpdatePricingRule,
@@ -103,6 +106,7 @@ export function MenuManager({
   const [form, setForm] = useState<FormState>(defaultForm());
   const [saving, setSaving] = useState(false);
   const [savingOffers, setSavingOffers] = useState(false);
+  const [renamingCategory, setRenamingCategory] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const [pricingDraft, setPricingDraft] = useState<PricingRule>(pricingRule);
 
@@ -116,7 +120,7 @@ export function MenuManager({
   }, [pricingRule]);
 
   const allCategories = Array.from(
-    new Set([...CATEGORIES, ...menuItems.map((i) => i.category)])
+    new Set([...DEFAULT_CATEGORIES, ...menuItems.map((i) => i.category)])
   );
 
   const hasGolaPrices = GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);
@@ -274,6 +278,45 @@ export function MenuManager({
       setBulkError(error instanceof Error && error.message.trim() ? error.message : 'Failed to save some items');
     } finally {
       setSavingBulk(false);
+    }
+  };
+
+  const handleRenameCategory = async (currentCategory: string) => {
+    if (saving || savingBulk || savingOffers || renamingCategory) return;
+
+    const nextCategory = window.prompt(`Rename "${currentCategory}" to:`, currentCategory);
+    if (nextCategory == null) return;
+
+    const trimmedNextCategory = nextCategory.trim();
+    if (!trimmedNextCategory) {
+      alert('Category name cannot be empty.');
+      return;
+    }
+
+    if (trimmedNextCategory === currentCategory) {
+      return;
+    }
+
+    const existingCategory = allCategories.find(
+      (category) => category.toLowerCase() === trimmedNextCategory.toLowerCase() && category !== currentCategory,
+    );
+
+    const targetCategory = existingCategory ?? trimmedNextCategory;
+    const confirmed = existingCategory
+      ? window.confirm(`Category "${existingCategory}" already exists. Rename "${currentCategory}" and merge all its items into "${existingCategory}"?`)
+      : window.confirm(`Rename category "${currentCategory}" to "${trimmedNextCategory}"?`);
+
+    if (!confirmed) return;
+
+    setRenamingCategory(currentCategory);
+    setSaveError('');
+    try {
+      await onRenameCategory(currentCategory, targetCategory);
+      setForm((prev) => (prev.category === currentCategory ? { ...prev, category: targetCategory } : prev));
+    } catch (error) {
+      alert(error instanceof Error && error.message.trim() ? error.message : 'Failed to rename category.');
+    } finally {
+      setRenamingCategory(null);
     }
   };
 
@@ -469,7 +512,7 @@ export function MenuManager({
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
               <div className="flex gap-2 flex-wrap">
-                {CATEGORIES.map((cat) => (
+                {allCategories.map((cat) => (
                   <button
                     key={cat}
                     type="button"
@@ -487,7 +530,7 @@ export function MenuManager({
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                   >
-                    {CATEGORY_ICONS[cat as Category] ?? '🍡'} {cat}
+                    {CATEGORY_ICONS[cat] ?? '\u{1F361}'} {cat}
                   </button>
                 ))}
               </div>
@@ -637,56 +680,66 @@ export function MenuManager({
                 <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-slate-400" />
                   <h3 className="font-bold text-slate-700 uppercase tracking-wider text-sm">
-                    {(CATEGORY_ICONS as Record<string, string>)[category] ?? '🍡'} {category}
+                    {CATEGORY_ICONS[category] ?? '\u{1F361}'} {category}
                   </h3>
                 </div>
-                {category === 'Regular' && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Set Default Variant:</span>
-                    <select
-                      value=""
-                      onChange={async (e) => {
-                        const newVariant = e.target.value as GolaVariant;
-                        if (!newVariant) return;
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => { void handleRenameCategory(category); }}
+                    disabled={isBulkEdit || renamingCategory !== null}
+                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {renamingCategory === category ? 'Renaming...' : 'Rename Category'}
+                  </button>
+                  {category === 'Regular' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Set Default Variant:</span>
+                      <select
+                        value=""
+                        onChange={async (e) => {
+                          const newVariant = e.target.value as GolaVariant;
+                          if (!newVariant) return;
 
-                        const itemsToUpdate = items.filter(
-                          (i) => i.hasGolaVariants && i.defaultGolaVariant !== newVariant
-                        );
-                        if (itemsToUpdate.length === 0) {
-                          alert(`All items with variants in ${category} are already set to ${newVariant}.`);
-                          return;
-                        }
-
-                        if (
-                          !window.confirm(
-                            `Set default variant to "${newVariant}" for ${itemsToUpdate.length} dish items?`
-                          )
-                        ) {
-                          return;
-                        }
-
-                        try {
-                          await Promise.all(
-                            itemsToUpdate.map(async (item) => {
-                              const { id: itemId, ...rest } = item;
-                              return onUpdate(itemId, { ...rest, defaultGolaVariant: newVariant });
-                            })
+                          const itemsToUpdate = items.filter(
+                            (i) => i.hasGolaVariants && i.defaultGolaVariant !== newVariant
                           );
-                        } catch (err) {
-                          alert(err instanceof Error ? err.message : 'Failed to save some items');
-                        }
-                      }}
-                      className="border border-slate-200 rounded-lg px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700 bg-white"
-                    >
-                      <option value="" disabled>-- Select Variant --</option>
-                      {GOLA_VARIANTS.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                          if (itemsToUpdate.length === 0) {
+                            alert(`All items with variants in ${category} are already set to ${newVariant}.`);
+                            return;
+                          }
+
+                          if (
+                            !window.confirm(
+                              `Set default variant to "${newVariant}" for ${itemsToUpdate.length} dish items?`
+                            )
+                          ) {
+                            return;
+                          }
+
+                          try {
+                            await Promise.all(
+                              itemsToUpdate.map(async (item) => {
+                                const { id: itemId, ...rest } = item;
+                                return onUpdate(itemId, { ...rest, defaultGolaVariant: newVariant });
+                              })
+                            );
+                          } catch (err) {
+                            alert(err instanceof Error ? err.message : 'Failed to save some items');
+                          }
+                        }}
+                        className="border border-slate-200 rounded-lg px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700 bg-white"
+                      >
+                        <option value="" disabled>-- Select Variant --</option>
+                        {GOLA_VARIANTS.map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="divide-y divide-slate-100">
                 {items.map((item) => {

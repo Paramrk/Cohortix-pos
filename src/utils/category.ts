@@ -1,6 +1,6 @@
 const STICK_RESTRICTED_CATEGORIES = new Set([
-  'special',
   'special dish',
+  'special  dish',
   'pyali',
   'pyaali',
 ]);
