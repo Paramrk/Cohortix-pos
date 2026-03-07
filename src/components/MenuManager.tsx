@@ -283,6 +283,7 @@ export function MenuManager({
 
   const handleRenameCategory = async (currentCategory: string) => {
     if (saving || savingBulk || savingOffers || renamingCategory) return;
+    const currentCategoryCount = menuItems.filter((item) => item.category === currentCategory).length;
 
     const nextCategory = window.prompt(`Rename "${currentCategory}" to:`, currentCategory);
     if (nextCategory == null) return;
@@ -302,9 +303,14 @@ export function MenuManager({
     );
 
     const targetCategory = existingCategory ?? trimmedNextCategory;
+    const mergeTargetCount = existingCategory
+      ? menuItems.filter((item) => item.category.toLowerCase() === existingCategory.toLowerCase()).length
+      : 0;
     const confirmed = existingCategory
-      ? window.confirm(`Category "${existingCategory}" already exists. Rename "${currentCategory}" and merge all its items into "${existingCategory}"?`)
-      : window.confirm(`Rename category "${currentCategory}" to "${trimmedNextCategory}"?`);
+      ? window.confirm(
+        `Category "${existingCategory}" already has ${mergeTargetCount} item(s). Merge ${currentCategoryCount} item(s) from "${currentCategory}" into it?`,
+      )
+      : window.confirm(`Rename category "${currentCategory}" (${currentCategoryCount} item(s)) to "${trimmedNextCategory}"?`);
 
     if (!confirmed) return;
 
@@ -323,7 +329,12 @@ export function MenuManager({
   return (
     <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu Management</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu Management</h2>
+          <span className="text-[11px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">
+            Live Service
+          </span>
+        </div>
         <button
           onClick={handleToggleBulkEdit}
           disabled={savingBulk}
@@ -844,7 +855,7 @@ export function MenuManager({
                         </button>
                         <button
                           onClick={() => {
-                            if (window.confirm(`Delete ${item.name}?`)) onDelete(item.id);
+                            if (window.confirm(`Delete "${item.name}" permanently? This menu item will be removed from live ordering.`)) onDelete(item.id);
                           }}
                           className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                           title="Delete"

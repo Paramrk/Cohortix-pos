@@ -19,9 +19,25 @@ interface OrderCardProps {
   isPending: boolean;
   settlingOrderId: string | null;
   setSettlingOrderId: (id: string | null) => void;
-  onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
-  onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
-  onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
+  mutationState?: OrderMutationState;
+  onRetryAction: (orderId: string) => void;
+  onUpdateStatus: (id: string, status: 'pending' | 'completed') => Promise<void>;
+  onUpdatePayment: (id: string, method: 'cash' | 'upi') => Promise<void>;
+  onClearPayment: (id: string, updatedTotal?: number) => Promise<void>;
+}
+
+type OrderActionKind = 'status' | 'payment' | 'clear';
+
+type RetryDescriptor =
+  | { kind: 'status'; nextStatus: 'pending' | 'completed' }
+  | { kind: 'payment'; method: 'cash' | 'upi' }
+  | { kind: 'clear'; updatedTotal?: number };
+
+interface OrderMutationState {
+  status: 'idle' | 'pending' | 'error';
+  action?: OrderActionKind;
+  message?: string;
+  retry?: RetryDescriptor;
 }
 
 function formatTime(ts: number) {
@@ -40,6 +56,8 @@ function OrderCard({
   isPending,
   settlingOrderId,
   setSettlingOrderId,
+  mutationState,
+  onRetryAction,
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
@@ -52,15 +70,17 @@ function OrderCard({
   }, [order.total]);
 
   const isUnpaid = order.paymentStatus !== 'paid';
+  const isBusy = mutationState?.status === 'pending';
+  const hasError = mutationState?.status === 'error' && mutationState.message;
 
-  const handleClearPayment = () => {
+  const handleClearPayment = async () => {
     const parsedAmount = Number(pendingDueAmount);
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      onClearPayment(order.id);
+      await onClearPayment(order.id);
       setShowClearOptions(false);
       return;
     }
-    onClearPayment(order.id, parsedAmount);
+    await onClearPayment(order.id, parsedAmount);
     setShowClearOptions(false);
   };
 
@@ -135,13 +155,29 @@ function OrderCard({
               </p>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
-                  onClick={() => { onUpdatePayment(order.id, 'cash'); setSettlingOrderId(null); }}
+                  onClick={async () => {
+                    try {
+                      await onUpdatePayment(order.id, 'cash');
+                      setSettlingOrderId(null);
+                    } catch {
+                      // Error state is handled by parent mutation state.
+                    }
+                  }}
+                  disabled={isBusy}
                   className="flex-1 min-h-11 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
                   Cash Received
                 </button>
                 <button
-                  onClick={() => { onUpdatePayment(order.id, 'upi'); setSettlingOrderId(null); }}
+                  onClick={async () => {
+                    try {
+                      await onUpdatePayment(order.id, 'upi');
+                      setSettlingOrderId(null);
+                    } catch {
+                      // Error state is handled by parent mutation state.
+                    }
+                  }}
+                  disabled={isBusy}
                   className="flex-1 min-h-11 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
                   UPI Received
@@ -149,6 +185,7 @@ function OrderCard({
               </div>
               <button
                 onClick={() => setSettlingOrderId(null)}
+                disabled={isBusy}
                 className="w-full text-slate-500 hover:text-slate-700 text-sm font-medium py-1 transition-colors"
               >
                 Cancel
@@ -176,18 +213,23 @@ function OrderCard({
               min="1"
               value={pendingDueAmount}
               onChange={(e) => setPendingDueAmount(e.target.value)}
+              disabled={isBusy}
               className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
               placeholder="Enter due amount"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
-                onClick={handleClearPayment}
+                onClick={() => {
+                  void handleClearPayment().catch(() => undefined);
+                }}
+                disabled={isBusy}
                 className="w-full min-h-11 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
               >
                 Clear With Amount
               </button>
               <button
                 onClick={() => setShowClearOptions(false)}
+                disabled={isBusy}
                 className="w-full min-h-11 bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
               >
                 Cancel
@@ -206,7 +248,10 @@ function OrderCard({
 
       {isPending ? (
         <button
-          onClick={() => onUpdateStatus(order.id, 'completed')}
+          onClick={() => {
+            void onUpdateStatus(order.id, 'completed').catch(() => undefined);
+          }}
+          disabled={isBusy}
           className="w-full min-h-12 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-sm"
         >
           <CheckCircle2 className="w-5 h-5" />
@@ -214,11 +259,26 @@ function OrderCard({
         </button>
       ) : (
         <button
-          onClick={() => onUpdateStatus(order.id, 'pending')}
+          onClick={() => {
+            void onUpdateStatus(order.id, 'pending').catch(() => undefined);
+          }}
+          disabled={isBusy}
           className="w-full min-h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition-colors"
         >
           Undo (Move to Pending)
         </button>
+      )}
+      {hasError && (
+        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-sm font-medium text-rose-700">{mutationState?.message}</p>
+          <button
+            type="button"
+            onClick={() => onRetryAction(order.id)}
+            className="mt-2 text-xs font-bold uppercase tracking-wide text-rose-700 hover:text-rose-800"
+          >
+            Retry Last Action
+          </button>
+        </div>
       )}
     </div>
   );
@@ -237,6 +297,7 @@ export function OrderQueue({
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
   const [mobileSection, setMobileSection] = useState<'pending' | 'completed'>('pending');
   const [pendingRenderLimit, setPendingRenderLimit] = useState(40);
+  const [mutationStateByOrder, setMutationStateByOrder] = useState<Record<string, OrderMutationState>>({});
 
   const pendingOrders = useMemo(
     () =>
@@ -262,6 +323,61 @@ export function OrderQueue({
   useEffect(() => {
     setPendingRenderLimit(40);
   }, [pendingOrders.length]);
+
+  const runOrderAction = async (
+    orderId: string,
+    action: OrderActionKind,
+    retry: RetryDescriptor,
+    executor: () => Promise<void>,
+  ) => {
+    setMutationStateByOrder((prev) => ({
+      ...prev,
+      [orderId]: { status: 'pending', action, retry },
+    }));
+
+    try {
+      await executor();
+      setMutationStateByOrder((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+    } catch (error) {
+      setMutationStateByOrder((prev) => ({
+        ...prev,
+        [orderId]: {
+          status: 'error',
+          action,
+          retry,
+          message: error instanceof Error && error.message.trim() ? error.message : 'Action failed. Please retry.',
+        },
+      }));
+      throw error;
+    }
+  };
+
+  const handleUpdateStatus = (id: string, status: 'pending' | 'completed') =>
+    runOrderAction(id, 'status', { kind: 'status', nextStatus: status }, () => Promise.resolve(onUpdateStatus(id, status)));
+
+  const handleUpdatePayment = (id: string, method: 'cash' | 'upi') =>
+    runOrderAction(id, 'payment', { kind: 'payment', method }, () => Promise.resolve(onUpdatePayment(id, method)));
+
+  const handleClearPayment = (id: string, updatedTotal?: number) =>
+    runOrderAction(id, 'clear', { kind: 'clear', updatedTotal }, () => Promise.resolve(onClearPayment(id, updatedTotal)));
+
+  const handleRetryAction = (orderId: string) => {
+    const retry = mutationStateByOrder[orderId]?.retry;
+    if (!retry) return;
+    if (retry.kind === 'status') {
+      void handleUpdateStatus(orderId, retry.nextStatus);
+      return;
+    }
+    if (retry.kind === 'payment') {
+      void handleUpdatePayment(orderId, retry.method);
+      return;
+    }
+    void handleClearPayment(orderId, retry.updatedTotal);
+  };
 
   return (
     <div className="mobile-bottom-offset md:pb-0">
@@ -350,9 +466,11 @@ export function OrderQueue({
                   isPending={true}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}
-                  onUpdateStatus={onUpdateStatus}
-                  onUpdatePayment={onUpdatePayment}
-                  onClearPayment={onClearPayment}
+                  mutationState={mutationStateByOrder[order.id]}
+                  onRetryAction={handleRetryAction}
+                  onUpdateStatus={handleUpdateStatus}
+                  onUpdatePayment={handleUpdatePayment}
+                  onClearPayment={handleClearPayment}
                 />
               ))
             )}
@@ -387,9 +505,11 @@ export function OrderQueue({
                   isPending={false}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}
-                  onUpdateStatus={onUpdateStatus}
-                  onUpdatePayment={onUpdatePayment}
-                  onClearPayment={onClearPayment}
+                  mutationState={mutationStateByOrder[order.id]}
+                  onRetryAction={handleRetryAction}
+                  onUpdateStatus={handleUpdateStatus}
+                  onUpdatePayment={handleUpdatePayment}
+                  onClearPayment={handleClearPayment}
                 />
               ))
             )}

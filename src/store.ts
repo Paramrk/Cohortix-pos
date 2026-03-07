@@ -7,6 +7,7 @@ const PRICING_RULE_STORAGE_KEY = 'pos_pricing_rule_v1';
 const PRICING_RULE_MENU_NAME = '__pricing_rule__';
 const PRICING_RULE_MENU_CATEGORY = '__system__';
 const ORDER_SYNC_INTERVAL_MS = 12000;
+const ORDER_RECONCILIATION_DELAYS_MS = [300, 900, 2000] as const;
 const SHOP_ID = 'main';
 const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
@@ -216,6 +217,10 @@ function upsertMenuItem(list: MenuItem[], menuItem: MenuItem) {
   return next;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function isMissingColumnError(error: { code?: string; message?: string } | null, column: string) {
   return (
     error?.code === 'PGRST204' &&
@@ -236,6 +241,13 @@ function menuWriteErrorMessage(error: { code?: string; message?: string } | null
     return 'Menu/offer update denied. Use a permitted account and try again.';
   }
   return error?.message || 'Failed to update menu/offer.';
+}
+
+function orderActionErrorMessage(error: { code?: string; message?: string } | null, fallback: string) {
+  if (isPermissionError(error)) {
+    return 'Staff session required for live order actions.';
+  }
+  return error?.message || fallback;
 }
 
 export function useStore() {
@@ -361,6 +373,55 @@ export function useStore() {
       success: !error,
     }));
   }, []);
+
+  const findOrderByClientRequestId = useCallback(async (clientRequestId: string, source: 'pos' | 'customer') => {
+    let { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('client_request_id', clientRequestId)
+      .eq('source', source)
+      .eq('shop_id', SHOP_ID)
+      .limit(1);
+
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('client_request_id', clientRequestId)
+        .eq('source', source)
+        .limit(1));
+    }
+
+    if (isMissingColumnError(error, 'source')) {
+      ({ data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('client_request_id', clientRequestId)
+        .limit(1));
+    }
+
+    if (isMissingColumnError(error, 'client_request_id')) {
+      return null;
+    }
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    const parsed = toOrder(data[0] as Record<string, unknown>);
+    return isOrderForCurrentShop(parsed) ? parsed : null;
+  }, []);
+
+  const reconcileCreatedOrder = useCallback(async (clientRequestId: string, source: 'pos' | 'customer') => {
+    for (const delayMs of ORDER_RECONCILIATION_DELAYS_MS) {
+      await wait(delayMs);
+      const reconciledOrder = await findOrderByClientRequestId(clientRequestId, source);
+      if (reconciledOrder) {
+        return reconciledOrder;
+      }
+    }
+    return null;
+  }, [findOrderByClientRequestId]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -647,9 +708,29 @@ export function useStore() {
       p_shop_id: SHOP_ID,
     });
 
-    setOrderPending(false);
-
     if (error) {
+      const reconciledOrder = await reconcileCreatedOrder(clientRequestId, 'pos');
+      if (reconciledOrder) {
+        setOrderPending(false);
+        setOrders((prev) => upsertOrder(prev, reconciledOrder));
+        setOrderError(null);
+        void refreshDashboardMetrics();
+        recordOrderCreate('pos', true, performance.now() - startedAt, {
+          orderNumber: reconciledOrder.orderNumber,
+          reconciled: true,
+          originalErrorCode: error.code,
+        });
+        return {
+          orderId: reconciledOrder.id,
+          orderNumber: reconciledOrder.orderNumber,
+          timestamp: reconciledOrder.timestamp,
+          businessDate: reconciledOrder.businessDate,
+          source: reconciledOrder.source,
+          clientRequestId,
+        };
+      }
+
+      setOrderPending(false);
       localInsertRequestIdsRef.current.delete(clientRequestId);
       const message = isPermissionError(error)
         ? 'Sign in as staff to create orders.'
@@ -658,27 +739,53 @@ export function useStore() {
       recordOrderCreate('pos', false, performance.now() - startedAt, {
         code: error.code,
         message: error.message,
+        reconciled: false,
       });
       return null;
     }
 
     const raw = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
     if (!raw) {
+      const reconciledOrder = await reconcileCreatedOrder(clientRequestId, 'pos');
+      if (reconciledOrder) {
+        setOrderPending(false);
+        setOrders((prev) => upsertOrder(prev, reconciledOrder));
+        setOrderError(null);
+        void refreshDashboardMetrics();
+        recordOrderCreate('pos', true, performance.now() - startedAt, {
+          orderNumber: reconciledOrder.orderNumber,
+          reconciled: true,
+          originalErrorCode: 'empty_response',
+        });
+        return {
+          orderId: reconciledOrder.id,
+          orderNumber: reconciledOrder.orderNumber,
+          timestamp: reconciledOrder.timestamp,
+          businessDate: reconciledOrder.businessDate,
+          source: reconciledOrder.source,
+          clientRequestId,
+        };
+      }
+
+      setOrderPending(false);
       localInsertRequestIdsRef.current.delete(clientRequestId);
-      setOrderError('Invalid response from server while placing order.');
+      setOrderError('Order not confirmed yet. Please retry once the warning clears.');
       recordOrderCreate('pos', false, performance.now() - startedAt, {
         message: 'empty response',
+        reconciled: false,
       });
       return null;
     }
 
     const inserted = toOrder(raw);
+    setOrderPending(false);
     setOrders((prev) => upsertOrder(prev, inserted));
     setOrderError(null);
     void refreshDashboardMetrics();
 
     recordOrderCreate('pos', true, performance.now() - startedAt, {
       orderNumber: inserted.orderNumber,
+      reconciled: false,
     });
 
     return {
@@ -689,7 +796,7 @@ export function useStore() {
       source: inserted.source,
       clientRequestId,
     };
-  }, [refreshDashboardMetrics]);
+  }, [reconcileCreatedOrder, refreshDashboardMetrics]);
 
   const updateOrderStatus = useCallback(async (id: string, status: 'pending' | 'completed') => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
@@ -698,9 +805,7 @@ export function useStore() {
       void refreshDashboardMetrics();
       return;
     }
-    if (!isPermissionError(error)) {
-      console.error('Failed to update order status', error.code, error.message);
-    }
+    throw new Error(orderActionErrorMessage(error, 'Failed to update order status.'));
   }, [refreshDashboardMetrics]);
 
   const updatePayment = useCallback(async (id: string, method: 'cash' | 'upi') => {
@@ -715,9 +820,7 @@ export function useStore() {
       void refreshDashboardMetrics();
       return;
     }
-    if (!isPermissionError(error)) {
-      console.error('Failed to update payment', error.code, error.message);
-    }
+    throw new Error(orderActionErrorMessage(error, 'Failed to update payment.'));
   }, [refreshDashboardMetrics]);
 
   const clearPayment = useCallback(async (id: string, updatedTotal?: number) => {
@@ -754,9 +857,7 @@ export function useStore() {
       void refreshDashboardMetrics();
       return;
     }
-    if (!isPermissionError(error)) {
-      console.error('Failed to clear payment', error.code, error.message);
-    }
+    throw new Error(orderActionErrorMessage(error, 'Failed to clear payment.'));
   }, [refreshDashboardMetrics]);
 
   const addExpense = useCallback(async (description: string, amount: number) => {
@@ -909,7 +1010,6 @@ export function useStore() {
   }, []);
 
   const clearData = useCallback(async () => {
-    if (!window.confirm('Are you sure you want to clear all data? This cannot be undone.')) return;
     const businessDate = getBusinessDateString();
 
     const deleteOrdersReq = supabase

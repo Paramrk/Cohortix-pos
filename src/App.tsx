@@ -219,6 +219,30 @@ export default function App() {
     await supabase.auth.signOut();
   };
 
+  const serviceAlerts = [
+    !ordersRealtimeConnected
+      ? {
+        id: 'realtime',
+        tone: 'amber' as const,
+        message: 'Live updates delayed; queue is using fallback refresh.',
+      }
+      : null,
+    ordersPermissionError
+      ? {
+        id: 'permission',
+        tone: 'rose' as const,
+        message: 'Staff session required for live order actions.',
+      }
+      : null,
+    orderError
+      ? {
+        id: 'order',
+        tone: 'rose' as const,
+        message: 'Order not confirmed yet; retry only after this warning clears.',
+      }
+      : null,
+  ].filter(Boolean) as Array<{ id: string; tone: 'amber' | 'rose'; message: string }>;
+
   return (
     <div className="min-h-dvh bg-slate-50 flex flex-col font-sans overflow-x-hidden">
       {/* Header (Desktop) */}
@@ -274,6 +298,24 @@ export default function App() {
           <LogOut className="w-4 h-4" />
         </button>
       </header>
+
+      {serviceAlerts.length > 0 && (
+        <div className="border-b border-slate-200 bg-white/90 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto w-full p-3 sm:px-6 lg:px-8 space-y-2">
+            {serviceAlerts.map((alert) => (
+              <div
+                key={alert.id}
+                className={`rounded-xl border px-3 py-2 text-sm font-medium ${alert.tone === 'amber'
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+                  }`}
+              >
+                {alert.message}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 overflow-visible flex flex-col">

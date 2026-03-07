@@ -12,7 +12,16 @@ interface NewOrderProps {
   onClearOrderError: () => void;
 }
 
+interface PosDraftOrderV1 {
+  version: 1;
+  cart: CartItem[];
+  customerName: string;
+  orderInstructions: string;
+  paymentMethod: 'cash' | 'upi' | 'pay_later';
+}
+
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
+const POS_DRAFT_STORAGE_KEY = 'pos_draft_order_v1';
 
 const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Ice Cream Only': 'bg-pink-100 text-pink-700',
@@ -102,6 +111,55 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'pay_later'>('cash');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(POS_DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<PosDraftOrderV1>;
+      if (parsed.version !== 1) return;
+      if (Array.isArray(parsed.cart)) {
+        setCart(parsed.cart as CartItem[]);
+      }
+      if (typeof parsed.customerName === 'string') {
+        setCustomerName(parsed.customerName);
+      }
+      if (typeof parsed.orderInstructions === 'string') {
+        setOrderInstructions(parsed.orderInstructions);
+      }
+      if (parsed.paymentMethod === 'cash' || parsed.paymentMethod === 'upi' || parsed.paymentMethod === 'pay_later') {
+        setPaymentMethod(parsed.paymentMethod);
+      }
+    } catch {
+      sessionStorage.removeItem(POS_DRAFT_STORAGE_KEY);
+    }
+  }, []);
+
+  useEffect(() => {
+    const nextDraft: PosDraftOrderV1 = {
+      version: 1,
+      cart,
+      customerName,
+      orderInstructions,
+      paymentMethod,
+    };
+
+    const shouldClearDraft =
+      cart.length === 0 &&
+      customerName.trim() === '' &&
+      orderInstructions.trim() === '' &&
+      paymentMethod === 'cash';
+
+    try {
+      if (shouldClearDraft) {
+        sessionStorage.removeItem(POS_DRAFT_STORAGE_KEY);
+        return;
+      }
+      sessionStorage.setItem(POS_DRAFT_STORAGE_KEY, JSON.stringify(nextDraft));
+    } catch {
+      // Ignore storage failures; in-memory checkout remains usable.
+    }
+  }, [cart, customerName, orderInstructions, paymentMethod]);
 
   useEffect(() => {
     const bodyStyle = document.body.style;
@@ -217,6 +275,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
     setOrderInstructions('');
     setPaymentMethod('cash');
     setShowMobileCart(false);
+    sessionStorage.removeItem(POS_DRAFT_STORAGE_KEY);
   };
 
   const categories = useMemo(() => Array.from(new Set(menuItems.map((i) => i.category))), [menuItems]);

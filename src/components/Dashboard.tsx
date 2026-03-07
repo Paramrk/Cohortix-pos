@@ -285,7 +285,12 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
   return (
     <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Today's Dashboard</h2>
+        <div className="flex items-center gap-2 flex-wrap">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Today's Dashboard</h2>
+          <span className="text-[11px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">
+            Live Service
+          </span>
+        </div>
         <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
           {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
         </span>
@@ -666,7 +671,11 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
 
       <div className="mt-12 pt-6 border-t border-slate-200">
         <button
-          onClick={onClearData}
+          onClick={() => {
+            const confirmation = window.prompt('Type RESET TODAY to permanently clear today\'s orders and month expenses.');
+            if (confirmation !== 'RESET TODAY') return;
+            onClearData();
+          }}
           className="flex items-center gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg transition-colors text-sm font-medium"
         >
           <AlertTriangle className="w-4 h-4" />
