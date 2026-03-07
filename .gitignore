@@ -10,3 +10,5 @@ coverage/
 !.env.example
 /supabase/migrations
 /nilkanth-ice-dish-gola
+
+.vercel

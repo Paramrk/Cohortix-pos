@@ -310,8 +310,7 @@ export function OrderQueue({
     () =>
       orders
         .filter((order) => order.status === 'completed')
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 10),
+        .sort((a, b) => b.timestamp - a.timestamp),
     [orders],
   );
 
@@ -490,7 +489,7 @@ export function OrderQueue({
         <div className={`flex-1 md:max-w-md ${mobileSection === 'completed' ? 'block' : 'hidden'} md:block`}>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            Recently Completed
+            Completed ({completedOrders.length})
           </h2>
           <div className="space-y-4">
             {completedOrders.length === 0 ? (
