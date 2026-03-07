@@ -295,7 +295,7 @@ export function OrderQueue({
   onClearPayment,
 }: OrderQueueProps) {
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
-  const [mobileSection, setMobileSection] = useState<'pending' | 'completed'>('pending');
+  const [mobileSection, setMobileSection] = useState<'pending' | 'payment-pending' | 'completed'>('pending');
   const [pendingRenderLimit, setPendingRenderLimit] = useState(40);
   const [mutationStateByOrder, setMutationStateByOrder] = useState<Record<string, OrderMutationState>>({});
 
@@ -312,6 +312,14 @@ export function OrderQueue({
         .filter((order) => order.status === 'completed')
         .sort((a, b) => b.timestamp - a.timestamp),
     [orders],
+  );
+  const paymentPendingOrders = useMemo(
+    () => completedOrders.filter((order) => order.paymentStatus !== 'paid'),
+    [completedOrders],
+  );
+  const paidCompletedOrders = useMemo(
+    () => completedOrders.filter((order) => order.paymentStatus === 'paid'),
+    [completedOrders],
   );
 
   const shouldChunkPendingRender = pendingOrders.length > 40;
@@ -421,7 +429,7 @@ export function OrderQueue({
         </div>
       )}
 
-      <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-2 gap-1">
+      <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-3 gap-1">
         <button
           onClick={() => setMobileSection('pending')}
           className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'pending'
@@ -432,13 +440,22 @@ export function OrderQueue({
           Preparing ({pendingOrders.length})
         </button>
         <button
+          onClick={() => setMobileSection('payment-pending')}
+          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'payment-pending'
+            ? 'bg-amber-100 text-amber-700'
+            : 'text-slate-500'
+            }`}
+        >
+          Payment ({paymentPendingOrders.length})
+        </button>
+        <button
           onClick={() => setMobileSection('completed')}
           className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'completed'
             ? 'bg-emerald-100 text-emerald-700'
             : 'text-slate-500'
             }`}
         >
-          Completed ({completedOrders.length})
+          Completed ({paidCompletedOrders.length})
         </button>
       </div>
 
@@ -485,8 +502,68 @@ export function OrderQueue({
           )}
         </div>
 
-        {/* Completed Orders */}
-        <div className={`flex-1 md:max-w-md ${mobileSection === 'completed' ? 'block' : 'hidden'} md:block`}>
+        {/* Payment Pending Orders (Mobile) */}
+        <div className={`md:hidden ${mobileSection === 'payment-pending' ? 'block' : 'hidden'}`}>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+            Payment Pending ({paymentPendingOrders.length})
+          </h2>
+          <div className="space-y-4">
+            {paymentPendingOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="font-medium">No unpaid completed orders.</p>
+              </div>
+            ) : (
+              paymentPendingOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isPending={false}
+                  settlingOrderId={settlingOrderId}
+                  setSettlingOrderId={setSettlingOrderId}
+                  mutationState={mutationStateByOrder[order.id]}
+                  onRetryAction={handleRetryAction}
+                  onUpdateStatus={handleUpdateStatus}
+                  onUpdatePayment={handleUpdatePayment}
+                  onClearPayment={handleClearPayment}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Completed Orders (Mobile) */}
+        <div className={`md:hidden ${mobileSection === 'completed' ? 'block' : 'hidden'}`}>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+            Completed ({paidCompletedOrders.length})
+          </h2>
+          <div className="space-y-4">
+            {paidCompletedOrders.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
+                <p className="font-medium">No completed orders yet.</p>
+              </div>
+            ) : (
+              paidCompletedOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isPending={false}
+                  settlingOrderId={settlingOrderId}
+                  setSettlingOrderId={setSettlingOrderId}
+                  mutationState={mutationStateByOrder[order.id]}
+                  onRetryAction={handleRetryAction}
+                  onUpdateStatus={handleUpdateStatus}
+                  onUpdatePayment={handleUpdatePayment}
+                  onClearPayment={handleClearPayment}
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Completed Orders (Desktop) */}
+        <div className="hidden flex-1 md:block md:max-w-md">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
             Completed ({completedOrders.length})
