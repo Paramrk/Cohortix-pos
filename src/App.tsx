@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut } from 'lucide-react';
+import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
 import { NewOrder } from './components/NewOrder';
@@ -20,6 +20,11 @@ interface NavButtonProps {
   badge?: number;
   activeTab: Tab;
   onSelect: (tab: Tab) => void;
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: NavButtonProps) {
@@ -50,6 +55,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [appInstalled, setAppInstalled] = useState(false);
   const [orderAlertsEnabled, setOrderAlertsEnabled] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(ORDER_ALERTS_ENABLED_STORAGE_KEY);
@@ -149,11 +156,49 @@ export default function App() {
     }
   }, []);
 
+  const handleInstallApp = useCallback(async () => {
+    if (!installPromptEvent) return;
+    await installPromptEvent.prompt();
+    await installPromptEvent.userChoice.catch(() => undefined);
+    setInstallPromptEvent(null);
+  }, [installPromptEvent]);
+
   useEffect(() => {
     return () => {
       if (alertAudioContextRef.current && alertAudioContextRef.current.state !== 'closed') {
         void alertAudioContextRef.current.close().catch(() => undefined);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const updateInstalledState = () => {
+      const standaloneByDisplayMode = window.matchMedia('(display-mode: standalone)').matches;
+      const standaloneByNavigator =
+        'standalone' in window.navigator &&
+        Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
+      setAppInstalled(standaloneByDisplayMode || standaloneByNavigator);
+    };
+
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setAppInstalled(true);
+      setInstallPromptEvent(null);
+    };
+
+    updateInstalledState();
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
@@ -242,6 +287,7 @@ export default function App() {
       }
       : null,
   ].filter(Boolean) as Array<{ id: string; tone: 'amber' | 'rose'; message: string }>;
+  const canInstallApp = Boolean(installPromptEvent) && !appInstalled;
 
   return (
     <div className="min-h-dvh bg-slate-50 flex flex-col font-sans overflow-x-hidden">
@@ -266,6 +312,16 @@ export default function App() {
                 <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
                 <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
               </nav>
+              {canInstallApp && (
+                <button
+                  type="button"
+                  onClick={() => { void handleInstallApp(); }}
+                  className="h-10 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-2 text-sm font-semibold"
+                >
+                  <Download className="w-4 h-4" />
+                  Install App
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { void handleSignOut(); }}
@@ -289,10 +345,20 @@ export default function App() {
           />
         </div>
         <h1 className="text-lg font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
+        {canInstallApp && (
+          <button
+            type="button"
+            onClick={() => { void handleInstallApp(); }}
+            className="h-9 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center justify-center gap-2 text-xs font-semibold"
+          >
+            <Download className="w-4 h-4" />
+            Install
+          </button>
+        )}
         <button
           type="button"
           onClick={() => { void handleSignOut(); }}
-          className="ml-auto h-9 w-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center"
+          className={`${canInstallApp ? '' : 'ml-auto '}h-9 w-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center`}
           aria-label="Sign out"
         >
           <LogOut className="w-4 h-4" />
@@ -354,6 +420,7 @@ export default function App() {
         {activeTab === 'menu' && (
           <MenuManager
             menuItems={menuItems}
+            orders={orders}
             onAdd={async (item) => {
               await addMenuItem(item);
             }}

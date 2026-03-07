@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, Save, Tag, AlertCircle } from 'lucide-react';
-import { MenuItem, GolaVariant, PricingRule } from '../types';
+import { MenuItem, GolaVariant, PricingRule, Order } from '../types';
 import { isStickRestrictedCategory } from '../utils/category';
 
 interface MenuManagerProps {
   menuItems: MenuItem[];
+  orders: Order[];
   onAdd: (item: Omit<MenuItem, 'id'>) => Promise<void>;
   onUpdate: (id: string, item: Omit<MenuItem, 'id'>) => Promise<void>;
   onRenameCategory: (currentName: string, nextName: string) => Promise<void>;
@@ -93,8 +94,25 @@ function menuItemToForm(item: MenuItem): FormState {
   };
 }
 
+function formatOrderTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getOrderItemVariant(item: Record<string, unknown>) {
+  if (typeof item.variant === 'string' && item.variant.trim()) return item.variant;
+  if (typeof item.variantName === 'string' && item.variantName.trim()) return item.variantName;
+  if (typeof item.variant_name === 'string' && item.variant_name.trim()) return item.variant_name;
+  return null;
+}
+
 export function MenuManager({
   menuItems,
+  orders,
   onAdd,
   onUpdate,
   onRenameCategory,
@@ -109,6 +127,11 @@ export function MenuManager({
   const [renamingCategory, setRenamingCategory] = useState<string | null>(null);
   const [saveError, setSaveError] = useState('');
   const [pricingDraft, setPricingDraft] = useState<PricingRule>(pricingRule);
+  const [showOrdersPanel, setShowOrdersPanel] = useState(false);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
+  const [orderSourceFilter, setOrderSourceFilter] = useState<'all' | 'pos' | 'customer'>('all');
+  const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | Order['paymentStatus']>('all');
 
   const [isBulkEdit, setIsBulkEdit] = useState(false);
   const [bulkDrafts, setBulkDrafts] = useState<Record<string, Partial<FormState>>>({});
@@ -131,6 +154,31 @@ export function MenuManager({
     (stickAllowed && form.stickPrice > 0) ||
     form.dishPrice > 0 ||
     GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);
+
+  const filteredOrders = useMemo(() => {
+    const normalizedSearch = orderSearch.trim().toLowerCase();
+
+    return [...orders]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .filter((order) => {
+        if (orderStatusFilter !== 'all' && order.status !== orderStatusFilter) return false;
+        if (orderSourceFilter !== 'all' && (order.source ?? 'pos') !== orderSourceFilter) return false;
+        if (orderPaymentFilter !== 'all' && order.paymentStatus !== orderPaymentFilter) return false;
+
+        if (!normalizedSearch) return true;
+
+        const itemText = order.items
+          .map((item) => `${item.name} ${getOrderItemVariant(item as unknown as Record<string, unknown>) ?? ''}`)
+          .join(' ')
+          .toLowerCase();
+
+        return (
+          order.customerName.toLowerCase().includes(normalizedSearch) ||
+          String(order.orderNumber).includes(normalizedSearch) ||
+          itemText.includes(normalizedSearch)
+        );
+      });
+  }, [orderPaymentFilter, orderSearch, orderSourceFilter, orderStatusFilter, orders]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,17 +383,145 @@ export function MenuManager({
             Live Service
           </span>
         </div>
-        <button
-          onClick={handleToggleBulkEdit}
-          disabled={savingBulk}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${isBulkEdit
-            ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200'
-            : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200'
-            }`}
-        >
-          {isBulkEdit ? 'Cancel Bulk Edit' : 'Bulk Edit'}
-        </button>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <button
+            type="button"
+            onClick={() => setShowOrdersPanel((prev) => !prev)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors border ${showOrdersPanel
+              ? 'bg-slate-800 text-white border-slate-800'
+              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            {showOrdersPanel ? 'Hide Orders' : 'Show Orders'}
+          </button>
+          <button
+            onClick={handleToggleBulkEdit}
+            disabled={savingBulk}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${isBulkEdit
+              ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200'
+              : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200'
+              }`}
+          >
+            {isBulkEdit ? 'Cancel Bulk Edit' : 'Bulk Edit'}
+          </button>
+        </div>
       </div>
+
+      {showOrdersPanel && (
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-800">Whole Order List</h3>
+              <p className="text-sm text-slate-500 mt-1">
+                Search and filter all live orders without leaving menu management.
+              </p>
+            </div>
+            <span className="text-xs font-bold uppercase tracking-wide bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
+              {filteredOrders.length} order(s)
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 mb-4">
+            <input
+              type="text"
+              value={orderSearch}
+              onChange={(e) => setOrderSearch(e.target.value)}
+              placeholder="Search by order #, customer, or item"
+              className="xl:col-span-2 h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+            <select
+              value={orderStatusFilter}
+              onChange={(e) => setOrderStatusFilter(e.target.value as 'all' | Order['status'])}
+              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+            <select
+              value={orderSourceFilter}
+              onChange={(e) => setOrderSourceFilter(e.target.value as 'all' | 'pos' | 'customer')}
+              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="all">All Sources</option>
+              <option value="pos">POS</option>
+              <option value="customer">Customer</option>
+            </select>
+            <select
+              value={orderPaymentFilter}
+              onChange={(e) => setOrderPaymentFilter(e.target.value as 'all' | Order['paymentStatus'])}
+              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+            >
+              <option value="all">All Payment</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </div>
+
+          <div className="max-h-[520px] overflow-y-auto space-y-3 pr-1">
+            {filteredOrders.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-slate-500">
+                No orders match the selected filters.
+              </div>
+            ) : (
+              filteredOrders.map((order) => (
+                <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-bold text-slate-800">#{order.orderNumber}</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${order.status === 'pending'
+                          ? 'bg-orange-100 text-orange-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                          {order.status}
+                        </span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${order.paymentStatus === 'paid'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'bg-rose-100 text-rose-700'
+                          }`}>
+                          {order.paymentStatus}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-slate-200 text-slate-600">
+                          {(order.source ?? 'pos').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-sm text-slate-700 font-semibold">{order.customerName}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">{formatOrderTimestamp(order.timestamp)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-slate-800">Rs {order.total}</div>
+                      <div className="text-xs text-slate-500">
+                        {order.items.reduce((sum, item) => sum + item.quantity, 0)} item(s)
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {order.items.map((item, index) => {
+                      const variant = getOrderItemVariant(item as unknown as Record<string, unknown>);
+                      return (
+                        <span key={`${order.id}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2.5 py-1 text-xs text-slate-700">
+                          <span className="font-bold">{item.quantity}x</span>
+                          <span>{item.name}</span>
+                          {variant && <span className="font-bold text-indigo-700 uppercase">{variant}</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+
+                  {order.orderInstructions && (
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Instructions</span>
+                      {order.orderInstructions}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {isBulkEdit && Object.keys(bulkDrafts).length > 0 && (
         <div className="sticky top-4 z-10 bg-white p-4 border border-slate-200 shadow-xl rounded-2xl flex flex-wrap gap-4 justify-between items-center mb-6">

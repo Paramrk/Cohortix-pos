@@ -1,0 +1,25 @@
+{
+  "name": "Cohortix POS",
+  "short_name": "POS",
+  "description": "Nilkanth Ice Dish Gola POS by Cohortix",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "./cohortix/darktheme-logo-name.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./cohortix/darktheme-logo-name.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
