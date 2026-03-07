@@ -9,6 +9,7 @@ const PRICING_RULE_MENU_CATEGORY = '__system__';
 const ORDER_SYNC_INTERVAL_MS = 12000;
 const ORDER_RECONCILIATION_DELAYS_MS = [300, 900, 2000] as const;
 const SHOP_ID = 'main';
+const PAYMENT_NOTE_PREFIX = 'Payment note:';
 const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
   bogoEnabled: false,
@@ -215,6 +216,23 @@ function upsertMenuItem(list: MenuItem[], menuItem: MenuItem) {
   const next = [...list];
   next[index] = menuItem;
   return next;
+}
+
+function mergePaymentNote(existingInstructions: string | undefined, paymentNote?: string) {
+  const trimmedNote = typeof paymentNote === 'string' ? paymentNote.trim() : '';
+  const baseInstructions = (existingInstructions ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(PAYMENT_NOTE_PREFIX))
+    .join('\n');
+
+  if (!trimmedNote) {
+    return baseInstructions || undefined;
+  }
+
+  return [baseInstructions, `${PAYMENT_NOTE_PREFIX} ${trimmedNote}`]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function wait(ms: number) {
@@ -808,20 +826,35 @@ export function useStore() {
     throw new Error(orderActionErrorMessage(error, 'Failed to update order status.'));
   }, [refreshDashboardMetrics]);
 
-  const updatePayment = useCallback(async (id: string, method: 'cash' | 'upi') => {
+  const updatePayment = useCallback(async (id: string, method: 'cash' | 'upi', note?: string) => {
+    const existingOrder = orders.find((order) => order.id === id);
+    const nextInstructions = mergePaymentNote(existingOrder?.orderInstructions, note);
     const { error } = await supabase
       .from('orders')
-      .update({ payment_method: method, payment_status: 'paid' })
+      .update({
+        payment_method: method,
+        payment_status: 'paid',
+        order_instructions: nextInstructions ?? null,
+      })
       .eq('id', id);
     if (!error) {
       setOrders((prev) =>
-        prev.map((o) => (o.id === id ? { ...o, paymentMethod: method, paymentStatus: 'paid' } : o)),
+        prev.map((o) => (
+          o.id === id
+            ? {
+              ...o,
+              paymentMethod: method,
+              paymentStatus: 'paid',
+              orderInstructions: mergePaymentNote(o.orderInstructions, note),
+            }
+            : o
+        )),
       );
       void refreshDashboardMetrics();
       return;
     }
     throw new Error(orderActionErrorMessage(error, 'Failed to update payment.'));
-  }, [refreshDashboardMetrics]);
+  }, [orders, refreshDashboardMetrics]);
 
   const clearPayment = useCallback(async (id: string, updatedTotal?: number) => {
     const safeAmount =

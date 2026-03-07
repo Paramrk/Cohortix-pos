@@ -9,7 +9,7 @@ interface OrderQueueProps {
   orderAlertsEnabled: boolean;
   onToggleOrderAlerts: (enabled: boolean) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
-  onUpdatePayment: (id: string, method: 'cash' | 'upi') => void | Promise<void>;
+  onUpdatePayment: (id: string, method: 'cash' | 'upi', note?: string) => void | Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
 }
 
@@ -22,7 +22,7 @@ interface OrderCardProps {
   mutationState?: OrderMutationState;
   onRetryAction: (orderId: string) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => Promise<void>;
-  onUpdatePayment: (id: string, method: 'cash' | 'upi') => Promise<void>;
+  onUpdatePayment: (id: string, method: 'cash' | 'upi', note?: string) => Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => Promise<void>;
 }
 
@@ -30,7 +30,7 @@ type OrderActionKind = 'status' | 'payment' | 'clear';
 
 type RetryDescriptor =
   | { kind: 'status'; nextStatus: 'pending' | 'completed' }
-  | { kind: 'payment'; method: 'cash' | 'upi' }
+  | { kind: 'payment'; method: 'cash' | 'upi'; note?: string }
   | { kind: 'clear'; updatedTotal?: number };
 
 interface OrderMutationState {
@@ -64,10 +64,17 @@ function OrderCard({
 }: OrderCardProps) {
   const [showClearOptions, setShowClearOptions] = useState(false);
   const [pendingDueAmount, setPendingDueAmount] = useState(String(order.total));
+  const [paymentNote, setPaymentNote] = useState('');
 
   useEffect(() => {
     setPendingDueAmount(String(order.total));
   }, [order.total]);
+
+  useEffect(() => {
+    if (settlingOrderId !== order.id) {
+      setPaymentNote('');
+    }
+  }, [order.id, settlingOrderId]);
 
   const isUnpaid = order.paymentStatus !== 'paid';
   const isBusy = mutationState?.status === 'pending';
@@ -153,11 +160,25 @@ function OrderCard({
               <p className="text-center text-[11px] text-slate-500">
                 Select received method to mark payment as paid
               </p>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold uppercase tracking-wide text-slate-600">
+                  Special Note (Optional)
+                </label>
+                <textarea
+                  value={paymentNote}
+                  onChange={(e) => setPaymentNote(e.target.value)}
+                  disabled={isBusy}
+                  rows={3}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Add payment note, reference, or special remark"
+                />
+              </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={async () => {
                     try {
-                      await onUpdatePayment(order.id, 'cash');
+                      await onUpdatePayment(order.id, 'cash', paymentNote);
+                      setPaymentNote('');
                       setSettlingOrderId(null);
                     } catch {
                       // Error state is handled by parent mutation state.
@@ -171,7 +192,8 @@ function OrderCard({
                 <button
                   onClick={async () => {
                     try {
-                      await onUpdatePayment(order.id, 'upi');
+                      await onUpdatePayment(order.id, 'upi', paymentNote);
+                      setPaymentNote('');
                       setSettlingOrderId(null);
                     } catch {
                       // Error state is handled by parent mutation state.
@@ -184,7 +206,10 @@ function OrderCard({
                 </button>
               </div>
               <button
-                onClick={() => setSettlingOrderId(null)}
+                onClick={() => {
+                  setPaymentNote('');
+                  setSettlingOrderId(null);
+                }}
                 disabled={isBusy}
                 className="w-full text-slate-500 hover:text-slate-700 text-sm font-medium py-1 transition-colors"
               >
@@ -366,8 +391,13 @@ export function OrderQueue({
   const handleUpdateStatus = (id: string, status: 'pending' | 'completed') =>
     runOrderAction(id, 'status', { kind: 'status', nextStatus: status }, () => Promise.resolve(onUpdateStatus(id, status)));
 
-  const handleUpdatePayment = (id: string, method: 'cash' | 'upi') =>
-    runOrderAction(id, 'payment', { kind: 'payment', method }, () => Promise.resolve(onUpdatePayment(id, method)));
+  const handleUpdatePayment = (id: string, method: 'cash' | 'upi', note?: string) =>
+    runOrderAction(
+      id,
+      'payment',
+      { kind: 'payment', method, note },
+      () => Promise.resolve(onUpdatePayment(id, method, note)),
+    );
 
   const handleClearPayment = (id: string, updatedTotal?: number) =>
     runOrderAction(id, 'clear', { kind: 'clear', updatedTotal }, () => Promise.resolve(onClearPayment(id, updatedTotal)));
@@ -380,7 +410,7 @@ export function OrderQueue({
       return;
     }
     if (retry.kind === 'payment') {
-      void handleUpdatePayment(orderId, retry.method);
+      void handleUpdatePayment(orderId, retry.method, retry.note);
       return;
     }
     void handleClearPayment(orderId, retry.updatedTotal);
