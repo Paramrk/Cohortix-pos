@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
 import { MenuItem, CartItem, Order, GolaVariant, PricingRule, OrderCreateResult } from '../types';
+import { isStickRestrictedCategory } from '../utils/category';
 
 interface NewOrderProps {
   menuItems: MenuItem[];
@@ -19,11 +20,6 @@ const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Ice Cream + Dry Fruit': 'bg-purple-100 text-purple-700',
   'Plain': 'bg-slate-100 text-slate-600',
 };
-
-function isStickRestrictedCategory(category: string) {
-  const normalized = category.trim().toLowerCase();
-  return normalized === 'special' || normalized === 'pyali';
-}
 
 function offerGroupSize(offerType: PricingRule['bogoType']) {
   return offerType === 'b1g1' ? 2 : 3;

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit2, Trash2, Save, Tag, AlertCircle } from 'lucide-react';
 import { MenuItem, GolaVariant, PricingRule } from '../types';
+import { isStickRestrictedCategory } from '../utils/category';
 
 interface MenuManagerProps {
   menuItems: MenuItem[];
@@ -21,11 +22,6 @@ const CATEGORY_ICONS: Record<Category, string> = {
   Special: '⭐',
   Pyali: '🍧',
 };
-
-function isStickRestrictedCategory(category: string) {
-  const normalized = category.trim().toLowerCase();
-  return normalized === 'special' || normalized === 'pyali';
-}
 
 interface FormState {
   name: string;
