@@ -709,6 +709,7 @@ export function useStore() {
     const itemsPayload = orderData.items.map((item) => ({
       id: item.id,
       name: item.name,
+      category: item.category,
       quantity: item.quantity,
       price: item.calculatedPrice,
       variantName: item.variant,

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Clock, User, QrCode } from 'lucide-react';
-import { Order } from '../types';
+import { MenuItem, Order } from '../types';
 
 interface OrderQueueProps {
   orders: Order[];
+  menuItems: MenuItem[];
   ordersRealtimeConnected: boolean;
   ordersPermissionError?: string | null;
   orderAlertsEnabled: boolean;
@@ -16,6 +17,7 @@ interface OrderQueueProps {
 interface OrderCardProps {
   key?: React.Key;
   order: Order;
+  menuItemsById: Map<string, string>;
   isPending: boolean;
   settlingOrderId: string | null;
   setSettlingOrderId: (id: string | null) => void;
@@ -51,8 +53,44 @@ function getItemVariant(item: Record<string, unknown>): string | null {
   return null;
 }
 
+function getItemCategory(item: Record<string, unknown>, menuItemsById: Map<string, string>) {
+  if (typeof item.category === 'string' && item.category.trim()) return item.category;
+  const itemId = typeof item.id === 'string' ? item.id : null;
+  return itemId ? menuItemsById.get(itemId) ?? null : null;
+}
+
+function getOrderItemsSubtotal(order: Order) {
+  return order.items.reduce((sum, item) => {
+    const rawItem = item as unknown as Record<string, unknown>;
+    const unitPrice = Number(
+      rawItem.calculatedPrice ?? rawItem.price ?? 0,
+    );
+    const quantity = Number(rawItem.quantity ?? 0);
+
+    return sum + (Number.isFinite(unitPrice) ? unitPrice : 0) * (Number.isFinite(quantity) ? quantity : 0);
+  }, 0);
+}
+
+function parseInstructionLines(instructions?: string) {
+  return (instructions ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function extractParcelNote(instructions?: string) {
+  return parseInstructionLines(instructions).find((line) => /\b(parcel|take\s*away|takeaway)\b/i.test(line)) ?? null;
+}
+
+function buildVisibleInstructions(instructions?: string) {
+  const parcelNote = extractParcelNote(instructions);
+  const remainingLines = parseInstructionLines(instructions).filter((line) => line !== parcelNote);
+  return remainingLines.length > 0 ? remainingLines.join('\n') : null;
+}
+
 function OrderCard({
   order,
+  menuItemsById,
   isPending,
   settlingOrderId,
   setSettlingOrderId,
@@ -65,6 +103,16 @@ function OrderCard({
   const [showClearOptions, setShowClearOptions] = useState(false);
   const [pendingDueAmount, setPendingDueAmount] = useState(String(order.total));
   const [paymentNote, setPaymentNote] = useState('');
+  const itemsSubtotal = getOrderItemsSubtotal(order);
+  const explicitParcelNote = extractParcelNote(order.orderInstructions);
+  const inferredParcelNote =
+    !explicitParcelNote &&
+    order.source === 'customer' &&
+    Math.round(order.total - itemsSubtotal) === 5
+      ? 'Parcel order (+Rs 5 parcel charge)'
+      : null;
+  const parcelNote = explicitParcelNote ?? inferredParcelNote;
+  const visibleInstructions = buildVisibleInstructions(order.orderInstructions);
 
   useEffect(() => {
     setPendingDueAmount(String(order.total));
@@ -121,28 +169,48 @@ function OrderCard({
         </div>
       </div>
 
-      {order.orderInstructions && (
+      {parcelNote && (
+        <div className="mb-3 p-2.5 rounded-lg border border-orange-200 bg-orange-50 text-sm text-orange-900">
+          <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Special Note</span>
+          {parcelNote}
+        </div>
+      )}
+
+      {visibleInstructions && (
         <div className="mb-3 p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
           <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Instructions</span>
-          {order.orderInstructions}
+          {visibleInstructions}
         </div>
       )}
 
       <div className="bg-slate-50 rounded-lg p-3 mb-4 space-y-2 border border-slate-100">
         {order.items.map((item, idx) => {
-          const variant = getItemVariant(item as unknown as Record<string, unknown>);
+          const rawItem = item as unknown as Record<string, unknown>;
+          const variant = getItemVariant(rawItem);
+          const category = getItemCategory(rawItem, menuItemsById);
           return (
             <div key={idx} className="flex justify-between text-sm items-start gap-2">
               <span className="text-slate-700 flex items-start gap-2 min-w-0 flex-1">
                 <span className="font-bold text-slate-900 bg-white border border-slate-200 w-6 h-6 flex items-center justify-center rounded-md">
                   {item.quantity}
                 </span>
-                <span className="font-medium break-words">{item.name}</span>
-                {variant && (
-                  <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
-                    {variant}
-                  </span>
-                )}
+                <span className="min-w-0 flex-1">
+                  <span className="font-medium break-words block">{item.name}</span>
+                  {(category || variant) && (
+                    <span className="mt-1 flex flex-wrap gap-1.5">
+                      {category && (
+                        <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded shrink-0">
+                          {category}
+                        </span>
+                      )}
+                      {variant && (
+                        <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
+                          {variant}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </span>
               </span>
             </div>
           );
@@ -311,6 +379,7 @@ function OrderCard({
 
 export function OrderQueue({
   orders,
+  menuItems,
   ordersRealtimeConnected,
   ordersPermissionError,
   orderAlertsEnabled,
@@ -323,6 +392,10 @@ export function OrderQueue({
   const [mobileSection, setMobileSection] = useState<'pending' | 'payment-pending' | 'completed'>('pending');
   const [pendingRenderLimit, setPendingRenderLimit] = useState(40);
   const [mutationStateByOrder, setMutationStateByOrder] = useState<Record<string, OrderMutationState>>({});
+  const menuItemsById = useMemo(
+    () => new Map(menuItems.map((item) => [item.id, item.category])),
+    [menuItems],
+  );
 
   const pendingOrders = useMemo(
     () =>
@@ -509,6 +582,7 @@ export function OrderQueue({
                 <OrderCard
                   key={order.id}
                   order={order}
+                  menuItemsById={menuItemsById}
                   isPending={true}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}
@@ -548,6 +622,7 @@ export function OrderQueue({
                 <OrderCard
                   key={order.id}
                   order={order}
+                  menuItemsById={menuItemsById}
                   isPending={false}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}
@@ -578,6 +653,7 @@ export function OrderQueue({
                 <OrderCard
                   key={order.id}
                   order={order}
+                  menuItemsById={menuItemsById}
                   isPending={false}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}
@@ -608,6 +684,7 @@ export function OrderQueue({
                 <OrderCard
                   key={order.id}
                   order={order}
+                  menuItemsById={menuItemsById}
                   isPending={false}
                   settlingOrderId={settlingOrderId}
                   setSettlingOrderId={setSettlingOrderId}

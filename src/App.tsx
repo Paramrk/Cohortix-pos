@@ -398,6 +398,7 @@ export default function App() {
         {activeTab === 'queue' && (
           <OrderQueue
             orders={orders}
+            menuItems={menuItems}
             ordersRealtimeConnected={ordersRealtimeConnected}
             ordersPermissionError={ordersPermissionError}
             orderAlertsEnabled={orderAlertsEnabled}
