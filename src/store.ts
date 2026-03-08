@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Order, Expense, MenuItem, PricingRule, OrderCreateResult, DashboardMetrics } from './types';
+import {
+  AnalyticsFilter,
+  AnalyticsRange,
+  DashboardMetrics,
+  Expense,
+  MenuItem,
+  Order,
+  OrderCreateResult,
+  PricingRule,
+  UpdateOrderDetailsInput,
+} from './types';
 import { supabase } from './lib/supabase';
 import { recordOrderCreate, recordRealtimeDisconnect } from './lib/telemetry';
 
@@ -10,6 +20,20 @@ const ORDER_SYNC_INTERVAL_MS = 12000;
 const ORDER_RECONCILIATION_DELAYS_MS = [300, 900, 2000] as const;
 const SHOP_ID = 'main';
 const PAYMENT_NOTE_PREFIX = 'Payment note:';
+const CANCEL_REASON_PREFIX = 'Cancel reason:';
+const IST_TIMEZONE = 'Asia/Kolkata';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const IST_WEEKDAY_INDEX: Record<string, number> = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6,
+};
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_MONTH_RE = /^\d{4}-\d{2}$/;
 const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
   bogoEnabled: false,
@@ -47,6 +71,9 @@ function parseOrderItems(value: unknown): Order['items'] {
 
 function normalizeOrderStatus(value: unknown): Order['status'] {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (normalized === 'cancelled' || normalized === 'canceled') {
+    return 'cancelled';
+  }
   if (normalized === 'completed' || normalized === 'complete' || normalized === 'done') {
     return 'completed';
   }
@@ -67,19 +94,158 @@ function normalizePaymentStatus(value: unknown): Order['paymentStatus'] {
 
 function getBusinessDateString(date = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
+    timeZone: IST_TIMEZONE,
   }).format(date);
 }
 
+function getIstDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: IST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(date);
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
+
+  return {
+    year: Number(getPart('year')),
+    month: Number(getPart('month')),
+    day: Number(getPart('day')),
+    weekday: getPart('weekday').toLowerCase(),
+  };
+}
+
+function toIstMidnightTimestamp(year: number, month: number, day: number) {
+  return new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+05:30`).getTime();
+}
+
+function getAnalyticsRangeBounds(range: 'day' | 'week' | 'month', referenceDate = new Date()) {
+  const { year, month, day, weekday } = getIstDateParts(referenceDate);
+  const dayStart = toIstMidnightTimestamp(year, month, day);
+
+  if (range === 'day') {
+    return { start: dayStart, end: dayStart + DAY_MS - 1 };
+  }
+
+  if (range === 'week') {
+    const weekdayIndex = IST_WEEKDAY_INDEX[weekday] ?? 0;
+    const daysSinceMonday = (weekdayIndex + 6) % 7;
+    const start = dayStart - daysSinceMonday * DAY_MS;
+    return { start, end: start + 7 * DAY_MS - 1 };
+  }
+
+  const start = toIstMidnightTimestamp(year, month, 1);
+  const nextMonthYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const end = toIstMidnightTimestamp(nextMonthYear, nextMonth, 1) - 1;
+  return { start, end };
+}
+
+function getSpecificDateBounds(dateValue: string) {
+  if (!ISO_DATE_RE.test(dateValue)) return null;
+  const start = new Date(`${dateValue}T00:00:00+05:30`).getTime();
+  if (!Number.isFinite(start)) return null;
+  return { start, end: start + DAY_MS - 1 };
+}
+
+function getSpecificMonthBounds(monthValue: string) {
+  if (!ISO_MONTH_RE.test(monthValue)) return null;
+  const [yearText, monthText] = monthValue.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return null;
+  const start = toIstMidnightTimestamp(year, month, 1);
+  const nextMonthYear = month === 12 ? year + 1 : year;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const end = toIstMidnightTimestamp(nextMonthYear, nextMonth, 1) - 1;
+  return { start, end };
+}
+
+function getCustomDateRangeBounds(startDate: string, endDate: string) {
+  const startBounds = getSpecificDateBounds(startDate);
+  const endBounds = getSpecificDateBounds(endDate);
+  if (!startBounds || !endBounds) return null;
+  if (startBounds.start > endBounds.end) return null;
+  return { start: startBounds.start, end: endBounds.end };
+}
+
+function normalizeAnalyticsFilter(input: AnalyticsFilter | AnalyticsRange): AnalyticsFilter {
+  if (typeof input === 'string') {
+    return { range: input };
+  }
+
+  return {
+    range: input.range,
+    specificDate: input.specificDate,
+    specificMonth: input.specificMonth,
+    customStartDate: input.customStartDate,
+    customEndDate: input.customEndDate,
+  };
+}
+
+function getAnalyticsFilterBounds(filter: AnalyticsFilter, referenceDate = new Date()) {
+  if (filter.range === 'specific_date') {
+    const fallbackDate = getBusinessDateString(referenceDate);
+    const specificDate = filter.specificDate && ISO_DATE_RE.test(filter.specificDate) ? filter.specificDate : fallbackDate;
+    const bounds = getSpecificDateBounds(specificDate) ?? getAnalyticsRangeBounds('day', referenceDate);
+    return {
+      ...bounds,
+      normalizedFilter: {
+        range: 'specific_date' as const,
+        specificDate,
+      },
+    };
+  }
+
+  if (filter.range === 'specific_month') {
+    const parts = getIstDateParts(referenceDate);
+    const fallbackMonth = `${parts.year}-${String(parts.month).padStart(2, '0')}`;
+    const specificMonth = filter.specificMonth && ISO_MONTH_RE.test(filter.specificMonth) ? filter.specificMonth : fallbackMonth;
+    const bounds = getSpecificMonthBounds(specificMonth) ?? getAnalyticsRangeBounds('month', referenceDate);
+    return {
+      ...bounds,
+      normalizedFilter: {
+        range: 'specific_month' as const,
+        specificMonth,
+      },
+    };
+  }
+
+  if (filter.range === 'custom') {
+    const customStartDate = filter.customStartDate ?? '';
+    const customEndDate = filter.customEndDate ?? '';
+    const bounds = getCustomDateRangeBounds(customStartDate, customEndDate);
+    if (bounds) {
+      return {
+        ...bounds,
+        normalizedFilter: {
+          range: 'custom' as const,
+          customStartDate,
+          customEndDate,
+        },
+      };
+    }
+
+    const fallback = getAnalyticsRangeBounds('day', referenceDate);
+    const fallbackDate = getBusinessDateString(referenceDate);
+    return {
+      ...fallback,
+      normalizedFilter: {
+        range: 'custom' as const,
+        customStartDate: customStartDate && ISO_DATE_RE.test(customStartDate) ? customStartDate : fallbackDate,
+        customEndDate: customEndDate && ISO_DATE_RE.test(customEndDate) ? customEndDate : fallbackDate,
+      },
+    };
+  }
+
+  const range = filter.range === 'day' || filter.range === 'week' || filter.range === 'month' ? filter.range : 'day';
+  const bounds = getAnalyticsRangeBounds(range, referenceDate);
+  return { ...bounds, normalizedFilter: { range } };
+}
+
 function monthStartTimestampInIst() {
-  const now = new Date();
-  const year = Number(
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric' }).format(now),
-  );
-  const month = Number(
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', month: '2-digit' }).format(now),
-  );
-  return new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00+05:30`).getTime();
+  return getAnalyticsRangeBounds('month').start;
 }
 
 function businessDateFromTimestamp(timestamp: number) {
@@ -235,6 +401,34 @@ function mergePaymentNote(existingInstructions: string | undefined, paymentNote?
     .join('\n');
 }
 
+function mergeCancelReason(existingInstructions: string | undefined, cancelReason?: string) {
+  const trimmedReason = typeof cancelReason === 'string' ? cancelReason.trim() : '';
+  const baseInstructions = (existingInstructions ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(CANCEL_REASON_PREFIX))
+    .join('\n');
+
+  if (!trimmedReason) {
+    return baseInstructions || undefined;
+  }
+
+  return [baseInstructions, `${CANCEL_REASON_PREFIX} ${trimmedReason}`]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function toOrderItemsPayload(items: Order['items']) {
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    quantity: item.quantity,
+    price: item.calculatedPrice,
+    variantName: item.variant,
+  }));
+}
+
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -262,6 +456,13 @@ function menuWriteErrorMessage(error: { code?: string; message?: string } | null
 }
 
 function orderActionErrorMessage(error: { code?: string; message?: string } | null, fallback: string) {
+  const lowerMessage = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+  if (
+    (error?.code === '22P02' || error?.code === '23514') &&
+    lowerMessage.includes('cancel')
+  ) {
+    return 'Cancel failed: add "cancelled" to the orders.status enum/check constraint in Supabase.';
+  }
   if (isPermissionError(error)) {
     return 'Staff session required for live order actions.';
   }
@@ -281,7 +482,13 @@ export function useStore() {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetrics | null>(null);
   const [dashboardMetricsLoading, setDashboardMetricsLoading] = useState(false);
+  const [analyticsFilter, setAnalyticsFilter] = useState<AnalyticsFilter>({ range: 'day' });
+  const [analyticsOrders, setAnalyticsOrders] = useState<Order[]>([]);
+  const [analyticsExpenses, setAnalyticsExpenses] = useState<Expense[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const localInsertRequestIdsRef = useRef<Map<string, number>>(new Map());
+  const analyticsFilterRef = useRef<AnalyticsFilter>({ range: 'day' });
 
   const persistPricingRuleToSupabase = useCallback(async (rule: PricingRule) => {
     await supabase.auth.refreshSession().catch(() => undefined);
@@ -391,6 +598,103 @@ export function useStore() {
       success: !error,
     }));
   }, []);
+
+  const fetchOrdersByRange = useCallback(async (startMs: number, endMs: number) => {
+    let { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', startMs)
+      .lte('timestamp', endMs)
+      .order('timestamp', { ascending: false });
+
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .gte('timestamp', startMs)
+        .lte('timestamp', endMs)
+        .order('timestamp', { ascending: false }));
+    }
+
+    if (!error && data) {
+      return {
+        orders: data
+          .map((row) => toOrder(row as Record<string, unknown>))
+          .filter((order) => isOrderForCurrentShop(order)),
+        error: null as { code?: string; message?: string } | null,
+      };
+    }
+
+    return { orders: [] as Order[], error };
+  }, []);
+
+  const fetchExpensesByRange = useCallback(async (startMs: number, endMs: number) => {
+    let { data, error } = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', startMs)
+      .lte('timestamp', endMs)
+      .order('timestamp', { ascending: false });
+
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ data, error } = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('timestamp', startMs)
+        .lte('timestamp', endMs)
+        .order('timestamp', { ascending: false }));
+    }
+
+    if (!error && data) {
+      return {
+        expenses: data.map((row) => toExpense(row as Record<string, unknown>)),
+        error: null as { code?: string; message?: string } | null,
+      };
+    }
+
+    return { expenses: [] as Expense[], error };
+  }, []);
+
+  const refreshAnalytics = useCallback(async (nextFilter: AnalyticsFilter | AnalyticsRange) => {
+    const normalizedInput = normalizeAnalyticsFilter(nextFilter);
+    const { start, end, normalizedFilter } = getAnalyticsFilterBounds(normalizedInput);
+    setAnalyticsFilter(normalizedFilter);
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    const [ordersResult, expensesResult] = await Promise.all([
+      fetchOrdersByRange(start, end),
+      fetchExpensesByRange(start, end),
+    ]);
+
+    setAnalyticsOrders(ordersResult.orders);
+    setAnalyticsExpenses(expensesResult.expenses);
+
+    if (isPermissionError(ordersResult.error) || isPermissionError(expensesResult.error)) {
+      setAnalyticsError('Staff session required for analytics data.');
+    } else if (ordersResult.error || expensesResult.error) {
+      setAnalyticsError('Could not refresh analytics for the selected range.');
+      if (ordersResult.error && !isPermissionError(ordersResult.error)) {
+        console.error('Failed to fetch analytics orders', ordersResult.error.code, ordersResult.error.message);
+      }
+      if (expensesResult.error && !isPermissionError(expensesResult.error)) {
+        console.error('Failed to fetch analytics expenses', expensesResult.error.code, expensesResult.error.message);
+      }
+    } else {
+      setAnalyticsError(null);
+    }
+
+    setAnalyticsLoading(false);
+  }, [fetchExpensesByRange, fetchOrdersByRange]);
+
+  useEffect(() => {
+    analyticsFilterRef.current = analyticsFilter;
+  }, [analyticsFilter]);
+
+  const refreshSelectedAnalytics = useCallback(() => {
+    void refreshAnalytics(analyticsFilterRef.current);
+  }, [refreshAnalytics]);
 
   const findOrderByClientRequestId = useCallback(async (clientRequestId: string, source: 'pos' | 'customer') => {
     let { data, error } = await supabase
@@ -536,6 +840,10 @@ export function useStore() {
     void fetchAll();
   }, [fetchAll]);
 
+  useEffect(() => {
+    void refreshAnalytics('day');
+  }, [refreshAnalytics]);
+
   const refreshOrders = useCallback(async () => {
     const businessDate = getBusinessDateString();
     const { data, error } = await supabase
@@ -548,6 +856,7 @@ export function useStore() {
     if (!error && data) {
       setOrdersPermissionError(null);
       setOrders(data.map((row) => toOrder(row as Record<string, unknown>)));
+      refreshSelectedAnalytics();
       return;
     }
 
@@ -561,6 +870,7 @@ export function useStore() {
             .map((row) => toOrder(row as Record<string, unknown>))
             .filter((order) => order.businessDate === today),
         );
+        refreshSelectedAnalytics();
       }
       return;
     }
@@ -576,7 +886,7 @@ export function useStore() {
       setOrdersPermissionError(null);
       console.error('Failed to refresh orders', error.code, error.message);
     }
-  }, []);
+  }, [refreshSelectedAnalytics]);
 
   useEffect(() => {
     const ordersChannel = supabase
@@ -590,6 +900,7 @@ export function useStore() {
             if (!deletedId) return;
             setOrders((prev) => prev.filter((order) => order.id !== deletedId));
             void refreshDashboardMetrics();
+            refreshSelectedAnalytics();
             return;
           }
 
@@ -611,12 +922,14 @@ export function useStore() {
               setIncomingOrderNotification(parsed);
             }
             void refreshDashboardMetrics();
+            refreshSelectedAnalytics();
             return;
           }
 
           if (payload.eventType === 'UPDATE') {
             setOrders((prev) => upsertOrder(prev, parsed));
             void refreshDashboardMetrics();
+            refreshSelectedAnalytics();
           }
         },
       )
@@ -679,7 +992,7 @@ export function useStore() {
       void supabase.removeChannel(ordersChannel);
       void supabase.removeChannel(menuChannel);
     };
-  }, [refreshDashboardMetrics, refreshOrders]);
+  }, [refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -693,10 +1006,11 @@ export function useStore() {
     const onFocus = () => {
       void refreshOrders();
       void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [refreshDashboardMetrics, refreshOrders]);
+  }, [refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
 
   const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>): Promise<OrderCreateResult | null> => {
     setOrderPending(true);
@@ -706,14 +1020,7 @@ export function useStore() {
     const clientRequestId = crypto.randomUUID();
     localInsertRequestIdsRef.current.set(clientRequestId, Date.now() + 30000);
 
-    const itemsPayload = orderData.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      category: item.category,
-      quantity: item.quantity,
-      price: item.calculatedPrice,
-      variantName: item.variant,
-    }));
+    const itemsPayload = toOrderItemsPayload(orderData.items);
 
     const { data, error } = await supabase.rpc('create_order_atomic', {
       p_customer_name: orderData.customerName,
@@ -734,6 +1041,7 @@ export function useStore() {
         setOrders((prev) => upsertOrder(prev, reconciledOrder));
         setOrderError(null);
         void refreshDashboardMetrics();
+        refreshSelectedAnalytics();
         recordOrderCreate('pos', true, performance.now() - startedAt, {
           orderNumber: reconciledOrder.orderNumber,
           reconciled: true,
@@ -771,6 +1079,7 @@ export function useStore() {
         setOrders((prev) => upsertOrder(prev, reconciledOrder));
         setOrderError(null);
         void refreshDashboardMetrics();
+        refreshSelectedAnalytics();
         recordOrderCreate('pos', true, performance.now() - startedAt, {
           orderNumber: reconciledOrder.orderNumber,
           reconciled: true,
@@ -801,6 +1110,7 @@ export function useStore() {
     setOrders((prev) => upsertOrder(prev, inserted));
     setOrderError(null);
     void refreshDashboardMetrics();
+    refreshSelectedAnalytics();
 
     recordOrderCreate('pos', true, performance.now() - startedAt, {
       orderNumber: inserted.orderNumber,
@@ -815,17 +1125,18 @@ export function useStore() {
       source: inserted.source,
       clientRequestId,
     };
-  }, [reconcileCreatedOrder, refreshDashboardMetrics]);
+  }, [reconcileCreatedOrder, refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const updateOrderStatus = useCallback(async (id: string, status: 'pending' | 'completed') => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
     if (!error) {
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
       void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
       return;
     }
     throw new Error(orderActionErrorMessage(error, 'Failed to update order status.'));
-  }, [refreshDashboardMetrics]);
+  }, [refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const updatePayment = useCallback(async (id: string, method: 'cash' | 'upi', note?: string) => {
     const existingOrder = orders.find((order) => order.id === id);
@@ -852,10 +1163,11 @@ export function useStore() {
         )),
       );
       void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
       return;
     }
     throw new Error(orderActionErrorMessage(error, 'Failed to update payment.'));
-  }, [orders, refreshDashboardMetrics]);
+  }, [orders, refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const clearPayment = useCallback(async (id: string, updatedTotal?: number) => {
     const safeAmount =
@@ -889,10 +1201,123 @@ export function useStore() {
         ),
       );
       void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
       return;
     }
     throw new Error(orderActionErrorMessage(error, 'Failed to clear payment.'));
-  }, [refreshDashboardMetrics]);
+  }, [refreshDashboardMetrics, refreshSelectedAnalytics]);
+
+  const updateOrderDetails = useCallback(async (id: string, payload: UpdateOrderDetailsInput) => {
+    const existingOrder = orders.find((order) => order.id === id) ?? analyticsOrders.find((order) => order.id === id);
+    if (!existingOrder) {
+      throw new Error('Order not found.');
+    }
+    if (existingOrder.status !== 'pending') {
+      throw new Error('Only pending orders can be modified.');
+    }
+
+    const sanitizedInstructions = payload.orderInstructions?.trim() ? payload.orderInstructions.trim() : undefined;
+    const roundedTotal = Math.max(0, Math.round(payload.total));
+    const clonedItems = payload.items.map((item) => ({ ...item }));
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        customer_name: payload.customerName.trim() || 'Guest',
+        items: toOrderItemsPayload(clonedItems),
+        total: roundedTotal,
+        payment_method: payload.paymentMethod,
+        payment_status: payload.paymentStatus,
+        order_instructions: sanitizedInstructions ?? null,
+      })
+      .eq('id', id);
+
+    if (!error) {
+      setOrders((prev) =>
+        prev.map((order) => (
+          order.id === id
+            ? {
+              ...order,
+              customerName: payload.customerName.trim() || 'Guest',
+              items: clonedItems,
+              total: roundedTotal,
+              paymentMethod: payload.paymentMethod,
+              paymentStatus: payload.paymentStatus,
+              orderInstructions: sanitizedInstructions,
+            }
+            : order
+        )),
+      );
+      setAnalyticsOrders((prev) =>
+        prev.map((order) => (
+          order.id === id
+            ? {
+              ...order,
+              customerName: payload.customerName.trim() || 'Guest',
+              items: clonedItems,
+              total: roundedTotal,
+              paymentMethod: payload.paymentMethod,
+              paymentStatus: payload.paymentStatus,
+              orderInstructions: sanitizedInstructions,
+            }
+            : order
+        )),
+      );
+      void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
+      return;
+    }
+
+    throw new Error(orderActionErrorMessage(error, 'Failed to modify order.'));
+  }, [analyticsOrders, orders, refreshDashboardMetrics, refreshSelectedAnalytics]);
+
+  const cancelOrder = useCallback(async (id: string, reason?: string) => {
+    const existingOrder = orders.find((order) => order.id === id) ?? analyticsOrders.find((order) => order.id === id);
+    if (!existingOrder) {
+      throw new Error('Order not found.');
+    }
+    if (existingOrder.status !== 'pending') {
+      throw new Error('Only pending orders can be cancelled.');
+    }
+
+    const nextInstructions = mergeCancelReason(existingOrder.orderInstructions, reason);
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: 'cancelled',
+        order_instructions: nextInstructions ?? null,
+      })
+      .eq('id', id);
+
+    if (!error) {
+      setOrders((prev) =>
+        prev.map((order) => (
+          order.id === id
+            ? {
+              ...order,
+              status: 'cancelled',
+              orderInstructions: nextInstructions,
+            }
+            : order
+        )),
+      );
+      setAnalyticsOrders((prev) =>
+        prev.map((order) => (
+          order.id === id
+            ? {
+              ...order,
+              status: 'cancelled',
+              orderInstructions: nextInstructions,
+            }
+            : order
+        )),
+      );
+      void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
+      return;
+    }
+
+    throw new Error(orderActionErrorMessage(error, 'Failed to cancel order.'));
+  }, [analyticsOrders, orders, refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const addExpense = useCallback(async (description: string, amount: number) => {
     const newExpense = { description, amount, timestamp: Date.now(), shop_id: SHOP_ID };
@@ -908,13 +1333,14 @@ export function useStore() {
     if (!error && data) {
       setExpenses((prev) => [toExpense(data), ...prev]);
       void refreshDashboardMetrics();
+      refreshSelectedAnalytics();
       return;
     }
 
     if (error && !isPermissionError(error)) {
       console.error('Failed to add expense', error.code, error.message);
     }
-  }, [refreshDashboardMetrics]);
+  }, [refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const addMenuItem = useCallback(async (item: Omit<MenuItem, 'id'>) => {
     await supabase.auth.refreshSession().catch(() => undefined);
@@ -1071,7 +1497,8 @@ export function useStore() {
     setOrders([]);
     setExpenses([]);
     void refreshDashboardMetrics();
-  }, [refreshDashboardMetrics]);
+    refreshSelectedAnalytics();
+  }, [refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const clearIncomingOrderNotification = useCallback(() => {
     setIncomingOrderNotification(null);
@@ -1091,6 +1518,7 @@ export function useStore() {
     localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
     setPricingRule(merged);
   }, [persistPricingRuleToSupabase, pricingRule]);
+  const analyticsRange = analyticsFilter.range;
 
   return {
     menuItems,
@@ -1105,7 +1533,15 @@ export function useStore() {
     orderError,
     dashboardMetrics,
     dashboardMetricsLoading,
+    analyticsFilter,
+    analyticsRange,
+    analyticsOrders,
+    analyticsExpenses,
+    analyticsLoading,
+    analyticsError,
     addOrder,
+    updateOrderDetails,
+    cancelOrder,
     updateOrderStatus,
     updatePayment,
     clearPayment,
@@ -1120,5 +1556,6 @@ export function useStore() {
     clearOrderError,
     refreshAll: fetchAll,
     refreshDashboardMetrics,
+    refreshAnalytics,
   };
 }

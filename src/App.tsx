@@ -8,6 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
 import { supabase } from './lib/supabase';
+import type { Order } from './types';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
@@ -53,6 +54,7 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
@@ -69,13 +71,14 @@ export default function App() {
   const lastPlayedOrderIdRef = useRef<string | null>(null);
   const {
     orders, expenses, menuItems, loading,
-    addOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
+    addOrder, updateOrderDetails, cancelOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
     addMenuItem, updateMenuItem, renameMenuCategory, deleteMenuItem, updatePricingRule,
     incomingOrderNotification, clearIncomingOrderNotification,
     ordersRealtimeConnected, pricingRule,
     orderPending, orderError, clearOrderError,
     ordersPermissionError,
     dashboardMetrics, dashboardMetricsLoading,
+    analyticsFilter, analyticsRange, analyticsOrders, analyticsExpenses, analyticsLoading, analyticsError, refreshAnalytics,
     refreshAll,
   } = useStore();
 
@@ -389,6 +392,9 @@ export default function App() {
           <NewOrder
             menuItems={menuItems}
             onPlaceOrder={addOrder}
+            editingOrder={editingOrder}
+            onUpdateOrder={updateOrderDetails}
+            onExitEditMode={() => setEditingOrder(null)}
             pricingRule={pricingRule}
             orderPending={orderPending}
             orderError={orderError}
@@ -406,16 +412,28 @@ export default function App() {
             onUpdateStatus={updateOrderStatus}
             onUpdatePayment={updatePayment}
             onClearPayment={clearPayment}
+            onCancelOrder={cancelOrder}
+            onRequestModifyOrder={(order) => {
+              setEditingOrder(order);
+              setActiveTab('new-order');
+            }}
           />
         )}
         {activeTab === 'dashboard' && (
           <Dashboard
-            orders={orders}
-            expenses={expenses}
             onAddExpense={addExpense}
             onClearData={clearData}
             metrics={dashboardMetrics}
             metricsLoading={dashboardMetricsLoading}
+            analyticsFilter={analyticsFilter}
+            analyticsRange={analyticsRange}
+            analyticsOrders={analyticsOrders}
+            analyticsExpenses={analyticsExpenses}
+            analyticsLoading={analyticsLoading}
+            analyticsError={analyticsError}
+            onChangeAnalyticsFilter={(nextFilter) => {
+              void refreshAnalytics(nextFilter);
+            }}
           />
         )}
         {activeTab === 'menu' && (

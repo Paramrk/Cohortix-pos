@@ -1,11 +1,22 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
-import { MenuItem, CartItem, Order, GolaVariant, PricingRule, OrderCreateResult } from '../types';
+import {
+  CartItem,
+  GolaVariant,
+  MenuItem,
+  Order,
+  OrderCreateResult,
+  PricingRule,
+  UpdateOrderDetailsInput,
+} from '../types';
 import { isStickRestrictedCategory } from '../utils/category';
 
 interface NewOrderProps {
   menuItems: MenuItem[];
   onPlaceOrder: (order: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>) => Promise<OrderCreateResult | null>;
+  editingOrder?: Order | null;
+  onUpdateOrder?: (id: string, payload: UpdateOrderDetailsInput) => Promise<void>;
+  onExitEditMode?: () => void;
   pricingRule: PricingRule;
   orderPending: boolean;
   orderError: string | null;
@@ -104,13 +115,52 @@ function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
   );
 }
 
-export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, orderError, onClearOrderError }: NewOrderProps) {
+function toEditableCartItems(items: Order['items']): CartItem[] {
+  return items.map((item, index) => {
+    const rawItem = item as unknown as Record<string, unknown>;
+    const rawVariant = rawItem.variant ?? rawItem.variantName ?? rawItem.variant_name;
+    const variant = typeof rawVariant === 'string' ? rawVariant : undefined;
+    const calculatedPrice = Number(rawItem.calculatedPrice ?? rawItem.price ?? 0);
+    const quantity = Number(rawItem.quantity ?? 1);
+    const basePrice = Number(rawItem.price ?? calculatedPrice);
+    const itemId = String(rawItem.id ?? `unknown-${index}`);
+
+    return {
+      ...item,
+      id: itemId,
+      name: String(rawItem.name ?? item.name ?? `Item ${index + 1}`),
+      category: String(rawItem.category ?? item.category ?? 'Regular'),
+      price: Number.isFinite(basePrice) ? basePrice : 0,
+      cartItemId:
+        typeof rawItem.cartItemId === 'string'
+          ? rawItem.cartItemId
+          : `${itemId}-${index}-${crypto.randomUUID()}`,
+      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      variant: variant as CartItem['variant'],
+      calculatedPrice: Number.isFinite(calculatedPrice) ? calculatedPrice : 0,
+    };
+  });
+}
+
+export function NewOrder({
+  menuItems,
+  onPlaceOrder,
+  editingOrder,
+  onUpdateOrder,
+  onExitEditMode,
+  pricingRule,
+  orderPending,
+  orderError,
+  onClearOrderError,
+}: NewOrderProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [orderInstructions, setOrderInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'pay_later'>('cash');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
+  const [updatePending, setUpdatePending] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -136,6 +186,20 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
   }, []);
 
   useEffect(() => {
+    if (!editingOrder) return;
+    setCart(toEditableCartItems(editingOrder.items));
+    setCustomerName(editingOrder.customerName ?? '');
+    setOrderInstructions(editingOrder.orderInstructions ?? '');
+    setPaymentMethod(editingOrder.paymentMethod);
+    setShowMobileCart(false);
+    setExpandedItemId(null);
+    setEditError(null);
+    onClearOrderError();
+  }, [editingOrder, onClearOrderError]);
+
+  useEffect(() => {
+    if (editingOrder) return;
+
     const nextDraft: PosDraftOrderV1 = {
       version: 1,
       cart,
@@ -159,7 +223,7 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
     } catch {
       // Ignore storage failures; in-memory checkout remains usable.
     }
-  }, [cart, customerName, orderInstructions, paymentMethod]);
+  }, [cart, customerName, editingOrder, orderInstructions, paymentMethod]);
 
   useEffect(() => {
     const bodyStyle = document.body.style;
@@ -257,25 +321,69 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
   const percentDiscountAmount = Math.round((subtotalAfterOffer * pricingRule.discountPercent) / 100);
   const total = Math.max(0, subtotalAfterOffer - percentDiscountAmount);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const isEditing = Boolean(editingOrder);
 
-  const handleCheckout = async () => {
-    if (cart.length === 0 || orderPending) return;
-    const result = await onPlaceOrder({
-      customerName: customerName.trim() || 'Guest',
-      orderInstructions: orderInstructions.trim() || undefined,
-      items: cart,
-      total,
-      status: 'pending',
-      paymentMethod,
-      paymentStatus: paymentMethod === 'pay_later' ? 'unpaid' : 'paid',
-    });
-    if (!result) return;
+  const resetOrderForm = () => {
     setCart([]);
     setCustomerName('');
     setOrderInstructions('');
     setPaymentMethod('cash');
     setShowMobileCart(false);
+    setEditError(null);
     sessionStorage.removeItem(POS_DRAFT_STORAGE_KEY);
+  };
+
+  const handleExitEditMode = () => {
+    resetOrderForm();
+    onClearOrderError();
+    onExitEditMode?.();
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0 || orderPending || updatePending) return;
+
+    const nextPaymentStatus: Order['paymentStatus'] = paymentMethod === 'pay_later' ? 'unpaid' : 'paid';
+    const payload: Omit<Order, 'id' | 'orderNumber' | 'timestamp'> = {
+      customerName: customerName.trim() || 'Guest',
+      orderInstructions: orderInstructions.trim() || undefined,
+      items: cart,
+      total,
+      status: 'pending' as const,
+      paymentMethod,
+      paymentStatus: nextPaymentStatus,
+    };
+
+    if (isEditing && editingOrder) {
+      if (!onUpdateOrder) {
+        setEditError('Order update action is not available.');
+        return;
+      }
+
+      setUpdatePending(true);
+      setEditError(null);
+      onClearOrderError();
+
+      try {
+        await onUpdateOrder(editingOrder.id, {
+          customerName: payload.customerName,
+          orderInstructions: payload.orderInstructions,
+          items: payload.items,
+          total: payload.total,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: payload.paymentStatus,
+        });
+        handleExitEditMode();
+      } catch (error) {
+        setEditError(error instanceof Error ? error.message : 'Failed to update order. Please retry.');
+      } finally {
+        setUpdatePending(false);
+      }
+      return;
+    }
+
+    const result = await onPlaceOrder(payload);
+    if (!result) return;
+    resetOrderForm();
   };
 
   const categories = useMemo(() => Array.from(new Set(menuItems.map((i) => i.category))), [menuItems]);
@@ -480,19 +588,21 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
           </div>
         </div>
 
-        {orderError && (
+        {(isEditing ? editError : orderError) && (
           <p className="mb-3 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-            {orderError}
+            {isEditing ? editError : orderError}
           </p>
         )}
 
         <button
           type="button"
           onClick={() => { void handleCheckout(); }}
-          disabled={cart.length === 0 || orderPending}
+          disabled={cart.length === 0 || orderPending || updatePending}
           className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
         >
-          {orderPending ? 'Placing Order...' : 'Place Order'}
+          {isEditing
+            ? (updatePending ? 'Updating Order...' : `Update Order #${editingOrder?.orderNumber ?? ''}`)
+            : (orderPending ? 'Placing Order...' : 'Place Order')}
         </button>
       </div>
     </>
@@ -502,6 +612,18 @@ export function NewOrder({ menuItems, onPlaceOrder, pricingRule, orderPending, o
     <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
       {/* Menu Section */}
       <div className={`flex-1 ${cart.length > 0 && !showMobileCart ? 'pb-36' : 'pb-4'} md:pb-0`}>
+        {isEditing && editingOrder && (
+          <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-indigo-800">Editing Order #{editingOrder.orderNumber}</p>
+            <button
+              type="button"
+              onClick={handleExitEditMode}
+              className="text-xs font-bold uppercase tracking-wide text-indigo-700 hover:text-indigo-900"
+            >
+              Exit Edit
+            </button>
+          </div>
+        )}
         <div className="mb-5 flex flex-wrap items-center gap-2">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu</h2>
           {pricingRule.bogoEnabled && (

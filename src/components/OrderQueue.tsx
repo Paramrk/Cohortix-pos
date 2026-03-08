@@ -12,6 +12,8 @@ interface OrderQueueProps {
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi', note?: string) => void | Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
+  onCancelOrder: (id: string, reason?: string) => void | Promise<void>;
+  onRequestModifyOrder: (order: Order) => void;
 }
 
 interface OrderCardProps {
@@ -23,17 +25,20 @@ interface OrderCardProps {
   setSettlingOrderId: (id: string | null) => void;
   mutationState?: OrderMutationState;
   onRetryAction: (orderId: string) => void;
+  onCancelOrder: (id: string, reason?: string) => Promise<void>;
+  onRequestModifyOrder: (order: Order) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi', note?: string) => Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => Promise<void>;
 }
 
-type OrderActionKind = 'status' | 'payment' | 'clear';
+type OrderActionKind = 'status' | 'payment' | 'clear' | 'cancel';
 
 type RetryDescriptor =
   | { kind: 'status'; nextStatus: 'pending' | 'completed' }
   | { kind: 'payment'; method: 'cash' | 'upi'; note?: string }
-  | { kind: 'clear'; updatedTotal?: number };
+  | { kind: 'clear'; updatedTotal?: number }
+  | { kind: 'cancel'; reason?: string };
 
 interface OrderMutationState {
   status: 'idle' | 'pending' | 'error';
@@ -96,13 +101,17 @@ function OrderCard({
   setSettlingOrderId,
   mutationState,
   onRetryAction,
+  onCancelOrder,
+  onRequestModifyOrder,
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
 }: OrderCardProps) {
   const [showClearOptions, setShowClearOptions] = useState(false);
+  const [showCancelOptions, setShowCancelOptions] = useState(false);
   const [pendingDueAmount, setPendingDueAmount] = useState(String(order.total));
   const [paymentNote, setPaymentNote] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
   const itemsSubtotal = getOrderItemsSubtotal(order);
   const explicitParcelNote = extractParcelNote(order.orderInstructions);
   const inferredParcelNote =
@@ -124,6 +133,12 @@ function OrderCard({
     }
   }, [order.id, settlingOrderId]);
 
+  useEffect(() => {
+    if (!showCancelOptions) {
+      setCancelReason('');
+    }
+  }, [showCancelOptions]);
+
   const isUnpaid = order.paymentStatus !== 'paid';
   const isBusy = mutationState?.status === 'pending';
   const hasError = mutationState?.status === 'error' && mutationState.message;
@@ -137,6 +152,11 @@ function OrderCard({
     }
     await onClearPayment(order.id, parsedAmount);
     setShowClearOptions(false);
+  };
+
+  const handleCancelOrder = async () => {
+    await onCancelOrder(order.id, cancelReason);
+    setShowCancelOptions(false);
   };
 
   return (
@@ -339,6 +359,63 @@ function OrderCard({
         )}
       </div>
 
+      {isPending && (
+        <div className="mb-4 pt-3 border-t border-slate-100 space-y-2">
+          <button
+            type="button"
+            onClick={() => onRequestModifyOrder(order)}
+            disabled={isBusy}
+            className="w-full min-h-11 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
+          >
+            Modify Order
+          </button>
+          {showCancelOptions ? (
+            <div className="space-y-2 bg-rose-50 border border-rose-200 rounded-xl p-3">
+              <label className="block text-xs font-bold uppercase tracking-wide text-rose-700">
+                Cancel Reason (Optional)
+              </label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={2}
+                disabled={isBusy}
+                className="w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                placeholder="Reason for cancellation"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleCancelOrder().catch(() => undefined);
+                  }}
+                  disabled={isBusy}
+                  className="w-full min-h-11 bg-rose-500 hover:bg-rose-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
+                >
+                  Confirm Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelOptions(false)}
+                  disabled={isBusy}
+                  className="w-full min-h-11 bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
+                >
+                  Keep Order
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowCancelOptions(true)}
+              disabled={isBusy}
+              className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
+            >
+              Cancel Order
+            </button>
+          )}
+        </div>
+      )}
+
       {isPending ? (
         <button
           onClick={() => {
@@ -387,6 +464,8 @@ export function OrderQueue({
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
+  onCancelOrder,
+  onRequestModifyOrder,
 }: OrderQueueProps) {
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
   const [mobileSection, setMobileSection] = useState<'pending' | 'payment-pending' | 'completed'>('pending');
@@ -475,6 +554,9 @@ export function OrderQueue({
   const handleClearPayment = (id: string, updatedTotal?: number) =>
     runOrderAction(id, 'clear', { kind: 'clear', updatedTotal }, () => Promise.resolve(onClearPayment(id, updatedTotal)));
 
+  const handleCancelOrder = (id: string, reason?: string) =>
+    runOrderAction(id, 'cancel', { kind: 'cancel', reason }, () => Promise.resolve(onCancelOrder(id, reason)));
+
   const handleRetryAction = (orderId: string) => {
     const retry = mutationStateByOrder[orderId]?.retry;
     if (!retry) return;
@@ -484,6 +566,10 @@ export function OrderQueue({
     }
     if (retry.kind === 'payment') {
       void handleUpdatePayment(orderId, retry.method, retry.note);
+      return;
+    }
+    if (retry.kind === 'cancel') {
+      void handleCancelOrder(orderId, retry.reason);
       return;
     }
     void handleClearPayment(orderId, retry.updatedTotal);
@@ -588,6 +674,8 @@ export function OrderQueue({
                   setSettlingOrderId={setSettlingOrderId}
                   mutationState={mutationStateByOrder[order.id]}
                   onRetryAction={handleRetryAction}
+                  onCancelOrder={handleCancelOrder}
+                  onRequestModifyOrder={onRequestModifyOrder}
                   onUpdateStatus={handleUpdateStatus}
                   onUpdatePayment={handleUpdatePayment}
                   onClearPayment={handleClearPayment}
@@ -628,6 +716,8 @@ export function OrderQueue({
                   setSettlingOrderId={setSettlingOrderId}
                   mutationState={mutationStateByOrder[order.id]}
                   onRetryAction={handleRetryAction}
+                  onCancelOrder={handleCancelOrder}
+                  onRequestModifyOrder={onRequestModifyOrder}
                   onUpdateStatus={handleUpdateStatus}
                   onUpdatePayment={handleUpdatePayment}
                   onClearPayment={handleClearPayment}
@@ -659,6 +749,8 @@ export function OrderQueue({
                   setSettlingOrderId={setSettlingOrderId}
                   mutationState={mutationStateByOrder[order.id]}
                   onRetryAction={handleRetryAction}
+                  onCancelOrder={handleCancelOrder}
+                  onRequestModifyOrder={onRequestModifyOrder}
                   onUpdateStatus={handleUpdateStatus}
                   onUpdatePayment={handleUpdatePayment}
                   onClearPayment={handleClearPayment}
@@ -690,6 +782,8 @@ export function OrderQueue({
                   setSettlingOrderId={setSettlingOrderId}
                   mutationState={mutationStateByOrder[order.id]}
                   onRetryAction={handleRetryAction}
+                  onCancelOrder={handleCancelOrder}
+                  onRequestModifyOrder={onRequestModifyOrder}
                   onUpdateStatus={handleUpdateStatus}
                   onUpdatePayment={handleUpdatePayment}
                   onClearPayment={handleClearPayment}

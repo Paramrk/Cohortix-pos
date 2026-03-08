@@ -1,584 +1,646 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  TrendingUp,
-  TrendingDown,
-  IndianRupee,
-  Receipt,
-  PlusCircle,
   AlertTriangle,
   CalendarDays,
-  Activity,
-  Wallet,
-  Smartphone,
-  Clock3,
-  ClipboardCheck,
-  ShoppingCart,
   CircleDot,
+  ClipboardCheck,
+  Clock3,
+  IndianRupee,
+  PlusCircle,
+  Receipt,
+  ShoppingCart,
+  Smartphone,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { Order, Expense, DashboardMetrics } from '../types';
-import { getRuntimeTelemetrySummary } from '../lib/telemetry';
+import type { AnalyticsFilter, AnalyticsRange, DashboardMetrics, Expense, Order } from '../types';
 
 interface DashboardProps {
-  orders: Order[];
-  expenses: Expense[];
   onAddExpense: (desc: string, amount: number) => void;
   onClearData: () => void;
   metrics?: DashboardMetrics | null;
   metricsLoading?: boolean;
+  analyticsFilter: AnalyticsFilter;
+  analyticsRange: AnalyticsRange;
+  analyticsOrders: Order[];
+  analyticsExpenses: Expense[];
+  analyticsLoading?: boolean;
+  analyticsError?: string | null;
+  onChangeAnalyticsFilter: (filter: AnalyticsFilter | AnalyticsRange) => void;
 }
 
-interface StatCardProps {
-  title: string;
-  amount: number;
-  icon: LucideIcon;
-  colorClass: string;
-  subtitle?: string;
-  isCurrency?: boolean;
-}
-
-interface ExpenseTrendRow {
-  label: string;
-  dateLabel: string;
-  total: number;
-  count: number;
-  widthPct: number;
-}
+const CANCEL_REASON_PREFIX = 'Cancel reason:';
 
 function formatCurrency(value: number) {
   return `Rs ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(value))}`;
 }
 
-function formatTime(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function formatDateTime(timestamp: number) {
+  return new Date(timestamp).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-function getExpenseBucketLabel(hour: number) {
-  if (hour >= 6 && hour < 12) return 'Morning (6am-12pm)';
-  if (hour >= 12 && hour < 17) return 'Afternoon (12pm-5pm)';
-  if (hour >= 17 && hour < 22) return 'Evening (5pm-10pm)';
-  return 'Night (10pm-6am)';
+function formatRangeDate(filter: AnalyticsFilter) {
+  const range = filter.range;
+  const now = new Date();
+  const dayLabel = now.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Asia/Kolkata',
+  });
+
+  if (range === 'day') {
+    return dayLabel;
+  }
+
+  if (range === 'month') {
+    return now.toLocaleDateString('en-IN', {
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    });
+  }
+
+  if (range === 'specific_date' && filter.specificDate) {
+    const parsed = new Date(`${filter.specificDate}T00:00:00+05:30`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('en-IN', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+        timeZone: 'Asia/Kolkata',
+      });
+    }
+  }
+
+  if (range === 'specific_month' && filter.specificMonth) {
+    const parsed = new Date(`${filter.specificMonth}-01T00:00:00+05:30`);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('en-IN', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Asia/Kolkata',
+      });
+    }
+  }
+
+  if (range === 'custom' && filter.customStartDate && filter.customEndDate) {
+    const start = new Date(`${filter.customStartDate}T00:00:00+05:30`);
+    const end = new Date(`${filter.customEndDate}T00:00:00+05:30`);
+    if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime())) {
+      return `${start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} - ${end.toLocaleDateString('en-IN', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: 'Asia/Kolkata',
+      })}`;
+    }
+  }
+
+  const dateParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+  }).formatToParts(now);
+  const year = Number(dateParts.find((part) => part.type === 'year')?.value ?? '0');
+  const month = Number(dateParts.find((part) => part.type === 'month')?.value ?? '1');
+  const day = Number(dateParts.find((part) => part.type === 'day')?.value ?? '1');
+  const weekday = (dateParts.find((part) => part.type === 'weekday')?.value ?? 'sun').toLowerCase();
+  const dayStart = new Date(`${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00+05:30`).getTime();
+  const weekdayIndex: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const daysSinceMonday = ((weekdayIndex[weekday] ?? 0) + 6) % 7;
+  const start = new Date(dayStart - daysSinceMonday * 24 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000);
+  return `${start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' })} - ${end.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Asia/Kolkata',
+  })}`;
 }
 
-export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics, metricsLoading = false }: DashboardProps) {
+function getItemVariant(item: Record<string, unknown>) {
+  if (typeof item.variant === 'string' && item.variant.trim()) return item.variant;
+  if (typeof item.variantName === 'string' && item.variantName.trim()) return item.variantName;
+  if (typeof item.variant_name === 'string' && item.variant_name.trim()) return item.variant_name;
+  return null;
+}
+
+function parseInstructionLines(instructions?: string) {
+  return (instructions ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function getCancelReason(instructions?: string) {
+  const reasonLine = parseInstructionLines(instructions).find((line) => line.startsWith(CANCEL_REASON_PREFIX));
+  if (!reasonLine) return null;
+  return reasonLine.replace(CANCEL_REASON_PREFIX, '').trim() || null;
+}
+
+function getVisibleInstructions(instructions?: string) {
+  const lines = parseInstructionLines(instructions).filter((line) => !line.startsWith(CANCEL_REASON_PREFIX));
+  return lines.length ? lines.join('\n') : null;
+}
+
+function getLineTotal(item: Record<string, unknown>) {
+  const unitPrice = Number(item.calculatedPrice ?? item.price ?? 0);
+  const quantity = Number(item.quantity ?? 0);
+  return (Number.isFinite(unitPrice) ? unitPrice : 0) * (Number.isFinite(quantity) ? quantity : 0);
+}
+
+interface ProductSalesRow {
+  key: string;
+  name: string;
+  quantitySold: number;
+  orderCount: number;
+}
+
+export function Dashboard({
+  onAddExpense,
+  onClearData,
+  metrics,
+  metricsLoading = false,
+  analyticsFilter,
+  analyticsRange,
+  analyticsOrders,
+  analyticsExpenses,
+  analyticsLoading = false,
+  analyticsError,
+  onChangeAnalyticsFilter,
+}: DashboardProps) {
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [opsSummary, setOpsSummary] = useState(() => getRuntimeTelemetrySummary());
+  const [specificDate, setSpecificDate] = useState(analyticsFilter.specificDate ?? '');
+  const [specificMonth, setSpecificMonth] = useState(analyticsFilter.specificMonth ?? '');
+  const [customStartDate, setCustomStartDate] = useState(analyticsFilter.customStartDate ?? '');
+  const [customEndDate, setCustomEndDate] = useState(analyticsFilter.customEndDate ?? '');
 
-  const now = new Date();
-  const today = new Date().setHours(0, 0, 0, 0);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  React.useEffect(() => {
+    setSpecificDate(analyticsFilter.specificDate ?? '');
+    setSpecificMonth(analyticsFilter.specificMonth ?? '');
+    setCustomStartDate(analyticsFilter.customStartDate ?? '');
+    setCustomEndDate(analyticsFilter.customEndDate ?? '');
+  }, [analyticsFilter.customEndDate, analyticsFilter.customStartDate, analyticsFilter.range, analyticsFilter.specificDate, analyticsFilter.specificMonth]);
 
-  const todaysOrders = useMemo(() => orders.filter((order) => order.timestamp >= today), [orders, today]);
-  const todaysExpenses = useMemo(() => expenses.filter((expense) => expense.timestamp >= today), [expenses, today]);
-
-  const fallbackTodayTotalSales = useMemo(
-    () => todaysOrders.reduce((sum, order) => sum + order.total, 0),
-    [todaysOrders],
+  const sortedOrders = useMemo(
+    () => [...analyticsOrders].sort((a, b) => b.timestamp - a.timestamp),
+    [analyticsOrders],
   );
-  const fallbackTodayCollected = useMemo(
-    () =>
-      todaysOrders
-        .filter((order) => order.paymentStatus !== 'unpaid')
-        .reduce((sum, order) => sum + order.total, 0),
-    [todaysOrders],
+  const activeOrders = useMemo(
+    () => sortedOrders.filter((order) => order.status !== 'cancelled'),
+    [sortedOrders],
   );
-  const fallbackTodayPending = useMemo(
-    () =>
-      todaysOrders
-        .filter((order) => order.paymentStatus === 'unpaid')
-        .reduce((sum, order) => sum + order.total, 0),
-    [todaysOrders],
-  );
-  const fallbackTodayExpenses = useMemo(
-    () => todaysExpenses.reduce((sum, expense) => sum + expense.amount, 0),
-    [todaysExpenses],
+  const sortedExpenses = useMemo(
+    () => [...analyticsExpenses].sort((a, b) => b.timestamp - a.timestamp),
+    [analyticsExpenses],
   );
 
-  const monthlyOrders = useMemo(() => orders.filter((order) => order.timestamp >= startOfMonth), [orders, startOfMonth]);
-  const monthlyExpenses = useMemo(() => expenses.filter((expense) => expense.timestamp >= startOfMonth), [expenses, startOfMonth]);
+  const totalSales = activeOrders.reduce((sum, order) => sum + order.total, 0);
+  const collected = activeOrders
+    .filter((order) => order.paymentStatus !== 'unpaid')
+    .reduce((sum, order) => sum + order.total, 0);
+  const pendingDue = activeOrders
+    .filter((order) => order.paymentStatus === 'unpaid')
+    .reduce((sum, order) => sum + order.total, 0);
+  const expensesTotal = sortedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const netProfit = collected - expensesTotal;
+  const orderCount = activeOrders.length;
+  const itemsSold = activeOrders.reduce(
+    (sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
+    0,
+  );
+  const avgOrderValue = orderCount > 0 ? Math.round(totalSales / orderCount) : 0;
+  const collectionRate = totalSales > 0 ? Math.round((collected / totalSales) * 100) : 0;
+  const expenseShare = collected > 0 ? Math.round((expensesTotal / collected) * 100) : 0;
+  const avgExpense = sortedExpenses.length > 0 ? Math.round(expensesTotal / sortedExpenses.length) : 0;
 
-  const fallbackMonthTotalSales = useMemo(
-    () => monthlyOrders.reduce((sum, order) => sum + order.total, 0),
-    [monthlyOrders],
-  );
-  const fallbackMonthCollected = useMemo(
-    () =>
-      monthlyOrders
-        .filter((order) => order.paymentStatus !== 'unpaid')
-        .reduce((sum, order) => sum + order.total, 0),
-    [monthlyOrders],
-  );
-  const fallbackMonthPending = useMemo(
-    () =>
-      monthlyOrders
-        .filter((order) => order.paymentStatus === 'unpaid')
-        .reduce((sum, order) => sum + order.total, 0),
-    [monthlyOrders],
-  );
-  const fallbackMonthExpenses = useMemo(
-    () => monthlyExpenses.reduce((sum, expense) => sum + expense.amount, 0),
-    [monthlyExpenses],
-  );
-
-  const todayTotalSales = metrics?.todayTotalSales ?? fallbackTodayTotalSales;
-  const todayCollected = metrics?.todayCollected ?? fallbackTodayCollected;
-  const todayPending = metrics?.todayPending ?? fallbackTodayPending;
-  const todayExpensesTotal = metrics?.todayExpenses ?? fallbackTodayExpenses;
-  const todayNetProfit = metrics?.todayNetProfit ?? (todayCollected - todayExpensesTotal);
-
-  const monthTotalSales = metrics?.monthTotalSales ?? fallbackMonthTotalSales;
-  const monthCollected = metrics?.monthCollected ?? fallbackMonthCollected;
-  const monthPending = metrics?.monthPending ?? fallbackMonthPending;
-  const monthExpensesTotal = metrics?.monthExpenses ?? fallbackMonthExpenses;
-  const monthNetProfit = metrics?.monthNetProfit ?? (monthCollected - monthExpensesTotal);
-
-  const todaysOrderCount = todaysOrders.length;
-  const todaysCompletedCount = useMemo(
-    () => todaysOrders.filter((order) => order.status === 'completed').length,
-    [todaysOrders],
-  );
-  const todaysPendingCount = Math.max(0, todaysOrderCount - todaysCompletedCount);
-  const todaysItemsSold = useMemo(
-    () =>
-      todaysOrders.reduce(
-        (sum, order) => sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0),
-        0,
-      ),
-    [todaysOrders],
-  );
-  const avgOrderValueToday = todaysOrderCount > 0 ? Math.round(todayTotalSales / todaysOrderCount) : 0;
-  const avgExpenseToday = todaysExpenses.length > 0 ? Math.round(todayExpensesTotal / todaysExpenses.length) : 0;
-  const avgExpenseMonth = monthlyExpenses.length > 0 ? Math.round(monthExpensesTotal / monthlyExpenses.length) : 0;
-
-  const todayPaymentBreakdown = useMemo(() => {
+  const paymentBreakdown = useMemo(() => {
     const breakdown = {
-      cash: { count: 0, total: 0 },
-      upi: { count: 0, total: 0 },
-      unpaid: { count: 0, total: 0 },
+      cash: { total: 0, count: 0 },
+      upi: { total: 0, count: 0 },
+      unpaid: { total: 0, count: 0 },
     };
 
-    for (const order of todaysOrders) {
+    for (const order of activeOrders) {
       if (order.paymentStatus === 'unpaid') {
-        breakdown.unpaid.count += 1;
         breakdown.unpaid.total += order.total;
+        breakdown.unpaid.count += 1;
         continue;
       }
 
       if (order.paymentMethod === 'upi') {
-        breakdown.upi.count += 1;
         breakdown.upi.total += order.total;
+        breakdown.upi.count += 1;
       } else {
-        breakdown.cash.count += 1;
         breakdown.cash.total += order.total;
+        breakdown.cash.count += 1;
       }
     }
 
     return breakdown;
-  }, [todaysOrders]);
+  }, [activeOrders]);
 
-  const todaySourceBreakdown = useMemo(() => {
+  const flowBreakdown = useMemo(() => ({
+    pending: sortedOrders.filter((order) => order.status === 'pending').length,
+    completed: sortedOrders.filter((order) => order.status === 'completed').length,
+    cancelled: sortedOrders.filter((order) => order.status === 'cancelled').length,
+  }), [sortedOrders]);
+
+  const sourceBreakdown = useMemo(() => {
     const source = { pos: 0, customer: 0, unknown: 0 };
-    for (const order of todaysOrders) {
+    for (const order of sortedOrders) {
       if (order.source === 'pos') source.pos += 1;
       else if (order.source === 'customer') source.customer += 1;
       else source.unknown += 1;
     }
     return source;
-  }, [todaysOrders]);
+  }, [sortedOrders]);
 
-  const todayCollectionRate = todayTotalSales > 0 ? Math.round((todayCollected / todayTotalSales) * 100) : 0;
-  const todayExpenseShare = todayCollected > 0 ? Math.round((todayExpensesTotal / todayCollected) * 100) : 0;
+  const productStats = useMemo(() => {
+    const rowsMap = new Map<string, { name: string; quantitySold: number; orderIds: Set<string> }>();
 
-  const largestTodayExpense = useMemo(() => {
-    if (todaysExpenses.length === 0) return null;
-    return todaysExpenses.reduce((largest, expense) => (expense.amount > largest.amount ? expense : largest));
-  }, [todaysExpenses]);
+    for (const order of activeOrders) {
+      for (const item of order.items) {
+        const rawItem = item as unknown as Record<string, unknown>;
+        const itemNameRaw = typeof rawItem.name === 'string' ? rawItem.name.trim() : item.name;
+        const itemName = itemNameRaw && itemNameRaw.length > 0 ? itemNameRaw : 'Unknown Item';
+        const key = itemName.toLowerCase();
+        const quantity = Number(rawItem.quantity ?? item.quantity);
+        const safeQty = Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
 
-  const largestMonthExpense = useMemo(() => {
-    if (monthlyExpenses.length === 0) return null;
-    return monthlyExpenses.reduce((largest, expense) => (expense.amount > largest.amount ? expense : largest));
-  }, [monthlyExpenses]);
+        const current = rowsMap.get(key);
+        if (current) {
+          current.quantitySold += safeQty;
+          current.orderIds.add(order.id);
+          continue;
+        }
 
-  const todaysExpenseBuckets = useMemo(() => {
-    const buckets = [
-      { key: 'Morning (6am-12pm)', count: 0, total: 0 },
-      { key: 'Afternoon (12pm-5pm)', count: 0, total: 0 },
-      { key: 'Evening (5pm-10pm)', count: 0, total: 0 },
-      { key: 'Night (10pm-6am)', count: 0, total: 0 },
-    ];
-
-    const bucketByLabel = new Map(buckets.map((bucket) => [bucket.key, bucket]));
-    for (const expense of todaysExpenses) {
-      const label = getExpenseBucketLabel(new Date(expense.timestamp).getHours());
-      const bucket = bucketByLabel.get(label);
-      if (!bucket) continue;
-      bucket.count += 1;
-      bucket.total += expense.amount;
+        rowsMap.set(key, {
+          name: itemName,
+          quantitySold: safeQty,
+          orderIds: new Set([order.id]),
+        });
+      }
     }
 
-    return buckets;
-  }, [todaysExpenses]);
-
-  const monthlyTopExpenses = useMemo(
-    () => [...monthlyExpenses].sort((a, b) => b.amount - a.amount).slice(0, 8),
-    [monthlyExpenses],
-  );
-
-  const lastSevenDayExpenseRows = useMemo((): ExpenseTrendRow[] => {
-    const nowDate = new Date();
-    nowDate.setHours(0, 0, 0, 0);
-    const dayMs = 24 * 60 * 60 * 1000;
-    const rows: ExpenseTrendRow[] = [];
-
-    for (let i = 6; i >= 0; i -= 1) {
-      const dayStart = nowDate.getTime() - i * dayMs;
-      const dayEnd = dayStart + dayMs;
-      const dayExpenses = expenses.filter((expense) => expense.timestamp >= dayStart && expense.timestamp < dayEnd);
-      const total = dayExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-      rows.push({
-        label: new Date(dayStart).toLocaleDateString('en-IN', { weekday: 'short' }),
-        dateLabel: new Date(dayStart).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
-        total,
-        count: dayExpenses.length,
-        widthPct: 0,
-      });
-    }
-
-    const maxTotal = Math.max(...rows.map((row) => row.total), 0);
-    return rows.map((row) => ({
-      ...row,
-      widthPct: maxTotal > 0 ? Math.max(6, Math.round((row.total / maxTotal) * 100)) : 6,
+    const allRows: ProductSalesRow[] = Array.from(rowsMap.entries()).map(([key, value]) => ({
+      key,
+      name: value.name,
+      quantitySold: value.quantitySold,
+      orderCount: value.orderIds.size,
     }));
-  }, [expenses]);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setOpsSummary(getRuntimeTelemetrySummary());
-    }, 15000);
-    return () => window.clearInterval(intervalId);
-  }, []);
+    const topRows = [...allRows].sort((a, b) =>
+      b.quantitySold - a.quantitySold ||
+      b.orderCount - a.orderCount ||
+      a.name.localeCompare(b.name),
+    );
+    const bottomRows = [...allRows].sort((a, b) =>
+      a.quantitySold - b.quantitySold ||
+      a.orderCount - b.orderCount ||
+      a.name.localeCompare(b.name),
+    );
+
+    return {
+      allRows,
+      topRows,
+      bottomRows,
+      mostSold: topRows[0] ?? null,
+      leastSold: bottomRows[0] ?? null,
+    };
+  }, [activeOrders]);
+
+  const rangeLabel = analyticsRange === 'day'
+    ? 'Day'
+    : analyticsRange === 'week'
+      ? 'Week'
+      : analyticsRange === 'month'
+        ? 'Month'
+        : analyticsRange === 'specific_date'
+          ? 'Specific Date'
+          : analyticsRange === 'specific_month'
+            ? 'Specific Month'
+            : 'Custom Range';
+  const visibleMetricsLoading = metricsLoading || analyticsLoading;
 
   const handleAddExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseDesc || !expenseAmount) return;
-    onAddExpense(expenseDesc, parseFloat(expenseAmount));
+    const amount = Number(expenseAmount);
+    if (!expenseDesc.trim() || !Number.isFinite(amount) || amount <= 0) return;
+    onAddExpense(expenseDesc.trim(), amount);
     setExpenseDesc('');
     setExpenseAmount('');
   };
 
-  const StatCard = ({ title, amount, icon: Icon, colorClass, subtitle, isCurrency = true }: StatCardProps) => (
-    <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-slate-500 font-medium text-sm mb-1">{title}</p>
-        <h3 className={`text-2xl sm:text-3xl font-bold ${colorClass}`}>
-          {isCurrency ? formatCurrency(amount) : new Intl.NumberFormat('en-IN').format(Math.round(amount))}
-        </h3>
-        {subtitle && <p className="text-xs text-slate-400 mt-2 break-words leading-relaxed">{subtitle}</p>}
-      </div>
-      <div className={`p-3 rounded-xl shrink-0 ${colorClass.replace('text-', 'bg-').replace('600', '100')}`}>
-        <Icon className={`w-6 h-6 ${colorClass}`} />
-      </div>
-    </div>
-  );
-
   return (
-    <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-6">
+    <div className="mobile-bottom-offset md:pb-0 max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Today's Dashboard</h2>
-          <span className="text-[11px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">
-            Live Service
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">POS Analytics</h2>
+          <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-full">
+            {rangeLabel} View
           </span>
         </div>
         <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-          {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'short', day: 'numeric' })}
+          {formatRangeDate(analyticsFilter)}
         </span>
       </div>
 
-      {metricsLoading && (
+      <div className="mb-5 bg-white border border-slate-200 rounded-xl p-1 inline-grid grid-cols-3 gap-1">
+        <button
+          type="button"
+          onClick={() => onChangeAnalyticsFilter('day')}
+          className={`min-h-10 px-4 rounded-lg text-sm font-bold transition-colors ${analyticsRange === 'day'
+            ? 'bg-indigo-100 text-indigo-700'
+            : 'text-slate-500 hover:bg-slate-50'
+            }`}
+        >
+          Day
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeAnalyticsFilter('week')}
+          className={`min-h-10 px-4 rounded-lg text-sm font-bold transition-colors ${analyticsRange === 'week'
+            ? 'bg-indigo-100 text-indigo-700'
+            : 'text-slate-500 hover:bg-slate-50'
+            }`}
+        >
+          Week
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeAnalyticsFilter('month')}
+          className={`min-h-10 px-4 rounded-lg text-sm font-bold transition-colors ${analyticsRange === 'month'
+            ? 'bg-indigo-100 text-indigo-700'
+            : 'text-slate-500 hover:bg-slate-50'
+            }`}
+        >
+          Month
+        </button>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Specific Date</p>
+          <input
+            type="date"
+            value={specificDate}
+            onChange={(e) => setSpecificDate(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => onChangeAnalyticsFilter({ range: 'specific_date', specificDate })}
+            className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
+          >
+            Apply Date
+          </button>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Specific Month</p>
+          <input
+            type="month"
+            value={specificMonth}
+            onChange={(e) => setSpecificMonth(e.target.value)}
+            className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => onChangeAnalyticsFilter({ range: 'specific_month', specificMonth })}
+            className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
+          >
+            Apply Month
+          </button>
+        </div>
+        <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Custom Date Range</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              type="date"
+              value={customStartDate}
+              onChange={(e) => setCustomStartDate(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"
+            />
+            <input
+              type="date"
+              value={customEndDate}
+              onChange={(e) => setCustomEndDate(e.target.value)}
+              className="w-full h-10 px-3 rounded-lg border border-slate-200 text-sm"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => onChangeAnalyticsFilter({ range: 'custom', customStartDate, customEndDate })}
+            className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
+          >
+            Apply Range
+          </button>
+        </div>
+      </div>
+
+      {visibleMetricsLoading && (
         <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-          Refreshing dashboard metrics
+          Refreshing analytics
+        </div>
+      )}
+
+      {analyticsError && (
+        <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {analyticsError}
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
-        <StatCard
-          title="Today's Collected"
-          amount={todayCollected}
-          icon={TrendingUp}
-          colorClass="text-indigo-600"
-          subtitle={`Total: ${formatCurrency(todayTotalSales)}${todayPending > 0 ? ` | Unpaid: ${formatCurrency(todayPending)}` : ''}`}
-        />
-        <StatCard
-          title="Today's Expenses"
-          amount={todayExpensesTotal}
-          icon={TrendingDown}
-          colorClass="text-rose-600"
-          subtitle={`${todaysExpenses.length} expense items`}
-        />
-        <StatCard
-          title="Today's Net Profit"
-          amount={todayNetProfit}
-          icon={IndianRupee}
-          colorClass={todayNetProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}
-          subtitle="Based on collected amount"
-        />
-        <StatCard
-          title="Orders Today"
-          amount={todaysOrderCount}
-          icon={ShoppingCart}
-          colorClass="text-slate-700"
-          subtitle={`${todaysItemsSold} items sold`}
-          isCurrency={false}
-        />
-        <StatCard
-          title="Avg Order Value"
-          amount={avgOrderValueToday}
-          icon={ClipboardCheck}
-          colorClass="text-blue-600"
-          subtitle={todaysOrderCount > 0 ? `${todaysOrderCount} orders` : 'No orders yet'}
-        />
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-slate-500 font-medium text-sm mb-1">Collected</p>
+          <h3 className="text-2xl sm:text-3xl font-bold text-indigo-600">{formatCurrency(collected)}</h3>
+          <p className="text-xs text-slate-400 mt-2">Total billed: {formatCurrency(totalSales)}</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-slate-500 font-medium text-sm mb-1">Expenses</p>
+          <h3 className="text-2xl sm:text-3xl font-bold text-rose-600">{formatCurrency(expensesTotal)}</h3>
+          <p className="text-xs text-slate-400 mt-2">{sortedExpenses.length} expense entries</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-slate-500 font-medium text-sm mb-1">Net Profit</p>
+          <h3 className={`text-2xl sm:text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {formatCurrency(netProfit)}
+          </h3>
+          <p className="text-xs text-slate-400 mt-2">Based on collected amount</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-slate-500 font-medium text-sm mb-1">Orders</p>
+          <h3 className="text-2xl sm:text-3xl font-bold text-slate-800">{orderCount}</h3>
+          <p className="text-xs text-slate-400 mt-2">{itemsSold} items sold</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <p className="text-slate-500 font-medium text-sm mb-1">Avg Order Value</p>
+          <h3 className="text-2xl sm:text-3xl font-bold text-blue-600">{formatCurrency(avgOrderValue)}</h3>
+          <p className="text-xs text-slate-400 mt-2">{orderCount > 0 ? `${orderCount} orders` : 'No orders yet'}</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Payment Breakdown (Today)</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-slate-700">
-                <Wallet className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm font-semibold">Cash Paid</span>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-emerald-700">{formatCurrency(todayPaymentBreakdown.cash.total)}</p>
-                <p className="text-xs text-slate-500">{todayPaymentBreakdown.cash.count} orders</p>
-              </div>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+          <h3 className="text-base font-bold text-slate-800">Payment Breakdown</h3>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-center gap-2 text-slate-700">
+              <Wallet className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold">Cash Paid</span>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-slate-700">
-                <Smartphone className="w-4 h-4 text-indigo-600" />
-                <span className="text-sm font-semibold">UPI Paid</span>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-indigo-700">{formatCurrency(todayPaymentBreakdown.upi.total)}</p>
-                <p className="text-xs text-slate-500">{todayPaymentBreakdown.upi.count} orders</p>
-              </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-emerald-700">{formatCurrency(paymentBreakdown.cash.total)}</p>
+              <p className="text-xs text-slate-500">{paymentBreakdown.cash.count} orders</p>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50 p-3">
-              <div className="flex items-center gap-2 text-rose-700">
-                <Clock3 className="w-4 h-4" />
-                <span className="text-sm font-semibold">Unpaid Due</span>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-rose-700">{formatCurrency(todayPaymentBreakdown.unpaid.total)}</p>
-                <p className="text-xs text-rose-600">{todayPaymentBreakdown.unpaid.count} orders</p>
-              </div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-center gap-2 text-slate-700">
+              <Smartphone className="w-4 h-4 text-indigo-600" />
+              <span className="text-sm font-semibold">UPI Paid</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-indigo-700">{formatCurrency(paymentBreakdown.upi.total)}</p>
+              <p className="text-xs text-slate-500">{paymentBreakdown.upi.count} orders</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50 p-3">
+            <div className="flex items-center gap-2 text-rose-700">
+              <Clock3 className="w-4 h-4" />
+              <span className="text-sm font-semibold">Unpaid Due</span>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-bold text-rose-700">{formatCurrency(paymentBreakdown.unpaid.total)}</p>
+              <p className="text-xs text-rose-600">{paymentBreakdown.unpaid.count} orders</p>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Order Flow (Today)</h3>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-slate-700">
-                <CircleDot className="w-4 h-4 text-orange-500" />
-                <span className="text-sm font-semibold">Pending Queue</span>
-              </div>
-              <span className="text-sm font-bold text-orange-600">{todaysPendingCount}</span>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+          <h3 className="text-base font-bold text-slate-800">Order Flow</h3>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-center gap-2 text-slate-700">
+              <CircleDot className="w-4 h-4 text-orange-500" />
+              <span className="text-sm font-semibold">Pending</span>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <div className="flex items-center gap-2 text-slate-700">
-                <ClipboardCheck className="w-4 h-4 text-emerald-600" />
-                <span className="text-sm font-semibold">Completed</span>
-              </div>
-              <span className="text-sm font-bold text-emerald-600">{todaysCompletedCount}</span>
+            <span className="text-sm font-bold text-orange-600">{flowBreakdown.pending}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <div className="flex items-center gap-2 text-slate-700">
+              <ClipboardCheck className="w-4 h-4 text-emerald-600" />
+              <span className="text-sm font-semibold">Completed</span>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <span className="text-sm font-semibold text-slate-700">POS Orders</span>
-              <span className="text-sm font-bold text-slate-800">{todaySourceBreakdown.pos}</span>
+            <span className="text-sm font-bold text-emerald-600">{flowBreakdown.completed}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-rose-100 bg-rose-50 p-3">
+            <div className="flex items-center gap-2 text-rose-700">
+              <TrendingDown className="w-4 h-4" />
+              <span className="text-sm font-semibold">Cancelled</span>
             </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <span className="text-sm font-semibold text-slate-700">Customer App Orders</span>
-              <span className="text-sm font-bold text-slate-800">{todaySourceBreakdown.customer}</span>
-            </div>
+            <span className="text-sm font-bold text-rose-600">{flowBreakdown.cancelled}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <span className="text-sm font-semibold text-slate-700">POS Orders</span>
+            <span className="text-sm font-bold text-slate-800">{sourceBreakdown.pos}</span>
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <span className="text-sm font-semibold text-slate-700">Customer App Orders</span>
+            <span className="text-sm font-bold text-slate-800">{sourceBreakdown.customer}</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-          <h3 className="text-base font-bold text-slate-800 mb-4">Collection Health</h3>
-          <div className="space-y-3">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Collection Rate</p>
-              <p className="text-xl font-bold text-emerald-600 mt-1">{todayCollectionRate}%</p>
-              <p className="text-xs text-slate-500 mt-1">Collected vs total billed today</p>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Expense Share</p>
-              <p className="text-xl font-bold text-rose-600 mt-1">{todayExpenseShare}%</p>
-              <p className="text-xs text-slate-500 mt-1">Expenses as a share of collected amount</p>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Average Expense Item</p>
-              <p className="text-xl font-bold text-slate-800 mt-1">{formatCurrency(avgExpenseToday)}</p>
-              <p className="text-xs text-slate-500 mt-1">{todaysExpenses.length} entries today</p>
-            </div>
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
+          <h3 className="text-base font-bold text-slate-800">Collection Health</h3>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Collection Rate</p>
+            <p className="text-xl font-bold text-emerald-600 mt-1">{collectionRate}%</p>
+            <p className="text-xs text-slate-500 mt-1">Collected vs total billed</p>
           </div>
-        </div>
-      </div>
-
-      <div className="bg-slate-800 rounded-2xl p-4 sm:p-6 mb-8 text-white shadow-lg">
-        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-slate-100">
-          <CalendarDays className="w-5 h-5 text-indigo-400" />
-          Monthly Finance Preview ({now.toLocaleString('default', { month: 'long' })})
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
-          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
-            <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Total Sales</p>
-            <p className="text-xl font-bold">{formatCurrency(monthTotalSales)}</p>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Expense Share</p>
+            <p className="text-xl font-bold text-rose-600 mt-1">{expenseShare}%</p>
+            <p className="text-xs text-slate-500 mt-1">Expenses as share of collected amount</p>
           </div>
-          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
-            <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Collected</p>
-            <p className="text-xl font-bold text-emerald-400">{formatCurrency(monthCollected)}</p>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Average Expense Entry</p>
+            <p className="text-xl font-bold text-slate-800 mt-1">{formatCurrency(avgExpense)}</p>
+            <p className="text-xs text-slate-500 mt-1">{sortedExpenses.length} entries</p>
           </div>
-          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
-            <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Pending</p>
-            <p className="text-xl font-bold text-rose-400">{formatCurrency(monthPending)}</p>
-          </div>
-          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
-            <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Expenses</p>
-            <p className="text-xl font-bold text-amber-300">{formatCurrency(monthExpensesTotal)}</p>
-          </div>
-          <div className="bg-slate-700/50 p-3 sm:p-4 rounded-xl border border-slate-600">
-            <p className="text-slate-400 text-xs font-medium mb-1 uppercase tracking-wider">Net Profit</p>
-            <p className={`text-xl font-bold ${monthNetProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {formatCurrency(monthNetProfit)}
-            </p>
+          <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Pending Due</p>
+            <p className="text-xl font-bold text-amber-600 mt-1">{formatCurrency(pendingDue)}</p>
+            <p className="text-xs text-slate-500 mt-1">Unpaid active orders</p>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-rose-500" />
-            Expense Insights
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Today Total</p>
-              <p className="text-lg font-bold text-slate-800">{formatCurrency(todayExpensesTotal)}</p>
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+          <h3 className="text-base font-bold text-slate-800 mb-3">Product Sales Highlights</h3>
+          {productStats.allRows.length === 0 ? (
+            <p className="text-sm text-slate-400 py-3">No product sales in this range.</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-emerald-700">Most Sold</p>
+                <p className="text-sm font-bold text-emerald-800 mt-1">{productStats.mostSold?.name}</p>
+                <p className="text-xs text-emerald-700 mt-1">
+                  Qty: {productStats.mostSold?.quantitySold ?? 0} | Orders: {productStats.mostSold?.orderCount ?? 0}
+                </p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-amber-700">Least Sold</p>
+                <p className="text-sm font-bold text-amber-800 mt-1">{productStats.leastSold?.name}</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Qty: {productStats.leastSold?.quantitySold ?? 0} | Orders: {productStats.leastSold?.orderCount ?? 0}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Month Total</p>
-              <p className="text-lg font-bold text-slate-800">{formatCurrency(monthExpensesTotal)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Avg Today Expense</p>
-              <p className="text-lg font-bold text-slate-800">{formatCurrency(avgExpenseToday)}</p>
-            </div>
-            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Avg Month Expense</p>
-              <p className="text-lg font-bold text-slate-800">{formatCurrency(avgExpenseMonth)}</p>
-            </div>
-          </div>
-          <div className="mt-3 space-y-2">
-            <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-rose-700">Largest Today</p>
-              {largestTodayExpense ? (
-                <>
-                  <p className="text-sm font-bold text-rose-700 mt-1">{largestTodayExpense.description}</p>
-                  <p className="text-xs text-rose-600">
-                    {formatCurrency(largestTodayExpense.amount)} at {formatTime(largestTodayExpense.timestamp)}
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-rose-600 mt-1">No expenses today.</p>
-              )}
-            </div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
-              <p className="text-xs uppercase tracking-wide text-amber-700">Largest This Month</p>
-              {largestMonthExpense ? (
-                <>
-                  <p className="text-sm font-bold text-amber-700 mt-1">{largestMonthExpense.description}</p>
-                  <p className="text-xs text-amber-600">
-                    {formatCurrency(largestMonthExpense.amount)} on{' '}
-                    {new Date(largestMonthExpense.timestamp).toLocaleDateString('en-IN', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </>
-              ) : (
-                <p className="text-xs text-amber-600 mt-1">No expenses this month.</p>
-              )}
-            </div>
-          </div>
+          )}
         </div>
 
-        <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Clock3 className="w-4 h-4 text-indigo-600" />
-            Expense Timing (Today)
-          </h3>
-          <div className="space-y-2">
-            {todaysExpenseBuckets.map((bucket) => (
-              <div key={bucket.key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-700">{bucket.key}</p>
-                  <p className="text-sm font-bold text-slate-800">{formatCurrency(bucket.total)}</p>
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+          <h3 className="text-base font-bold text-slate-800 mb-3">Product Order Count</h3>
+          {productStats.allRows.length === 0 ? (
+            <p className="text-sm text-slate-400 py-3">No product stats available.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-600 mb-2">Top Sold</p>
+                <div className="space-y-2">
+                  {productStats.topRows.slice(0, 5).map((row) => (
+                    <div key={`top-${row.key}`} className="flex items-center justify-between text-xs gap-2">
+                      <span className="font-medium text-slate-700 truncate">{row.name}</span>
+                      <span className="font-bold text-slate-800 shrink-0">{row.quantitySold} qty ({row.orderCount} orders)</span>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-xs text-slate-500 mt-1">{bucket.count} entries</p>
               </div>
-            ))}
-          </div>
-          <h4 className="mt-4 text-sm font-bold text-slate-700">Last 7 Days Expense Trend</h4>
-          <div className="mt-2 space-y-2">
-            {lastSevenDayExpenseRows.map((row) => (
-              <div key={row.dateLabel} className="rounded-xl border border-slate-100 bg-slate-50 p-2.5">
-                <div className="flex items-center justify-between text-xs text-slate-500 mb-1">
-                  <span>{row.label} ({row.dateLabel})</span>
-                  <span>{row.count} entries</span>
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-xs uppercase tracking-wide text-slate-600 mb-2">Least Sold</p>
+                <div className="space-y-2">
+                  {productStats.bottomRows.slice(0, 5).map((row) => (
+                    <div key={`bottom-${row.key}`} className="flex items-center justify-between text-xs gap-2">
+                      <span className="font-medium text-slate-700 truncate">{row.name}</span>
+                      <span className="font-bold text-slate-800 shrink-0">{row.quantitySold} qty ({row.orderCount} orders)</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
-                  <div className="h-full rounded-full bg-indigo-500" style={{ width: `${row.widthPct}%` }} />
-                </div>
-                <p className="text-xs font-bold text-slate-700 mt-1">{formatCurrency(row.total)}</p>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 mb-8">
-        <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
-          <Activity className="w-4 h-4 text-indigo-600" />
-          Runtime Operations Metrics
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div className="bg-slate-50 rounded-lg border border-slate-100 p-3">
-            <p className="text-slate-500 text-xs uppercase tracking-wide">Order Success</p>
-            <p className="font-bold text-slate-800">{opsSummary.orderCreateSuccess}</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg border border-slate-100 p-3">
-            <p className="text-slate-500 text-xs uppercase tracking-wide">Order Failure</p>
-            <p className="font-bold text-rose-600">{opsSummary.orderCreateFailure}</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg border border-slate-100 p-3">
-            <p className="text-slate-500 text-xs uppercase tracking-wide">Order Latency P50</p>
-            <p className="font-bold text-slate-800">{opsSummary.latencyP50} ms</p>
-          </div>
-          <div className="bg-slate-50 rounded-lg border border-slate-100 p-3">
-            <p className="text-slate-500 text-xs uppercase tracking-wide">Order Latency P95</p>
-            <p className="font-bold text-slate-800">{opsSummary.latencyP95} ms</p>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-slate-500">Realtime disconnects: {opsSummary.realtimeDisconnects}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <PlusCircle className="w-5 h-5 text-rose-500" />
@@ -591,7 +653,7 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
                 type="text"
                 value={expenseDesc}
                 onChange={(e) => setExpenseDesc(e.target.value)}
-                placeholder="e.g., Ice blocks, Syrups, Cups"
+                placeholder="e.g., Ice blocks, syrups, cups"
                 className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
                 required
               />
@@ -620,19 +682,17 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Receipt className="w-5 h-5 text-slate-500" />
-            Today's Expenses
+            {rangeLabel} Expenses
           </h3>
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
-            {todaysExpenses.length === 0 ? (
-              <p className="text-slate-400 text-center py-4">No expenses recorded today.</p>
+          <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2">
+            {sortedExpenses.length === 0 ? (
+              <p className="text-slate-400 text-center py-6">No expenses recorded for this range.</p>
             ) : (
-              [...todaysExpenses].sort((a, b) => b.timestamp - a.timestamp).map((expense) => (
+              sortedExpenses.map((expense) => (
                 <div key={expense.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
                   <div>
                     <p className="font-medium text-slate-800">{expense.description}</p>
-                    <p className="text-xs text-slate-500">
-                      {formatTime(expense.timestamp)}
-                    </p>
+                    <p className="text-xs text-slate-500">{formatDateTime(expense.timestamp)}</p>
                   </div>
                   <span className="font-bold text-rose-600">{formatCurrency(expense.amount)}</span>
                 </div>
@@ -642,34 +702,98 @@ export function Dashboard({ orders, expenses, onAddExpense, onClearData, metrics
         </div>
       </div>
 
-      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 mt-8">
-        <h3 className="text-base font-bold text-slate-800 mb-3">Largest Expenses This Month</h3>
-        <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
-          {monthlyTopExpenses.length === 0 ? (
-            <p className="text-sm text-slate-400 py-3">No month expense entries available.</p>
+      <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 mb-8">
+        <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <ShoppingCart className="w-4 h-4 text-indigo-600" />
+          Orders List (Detailed)
+        </h3>
+        <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+          {sortedOrders.length === 0 ? (
+            <p className="text-sm text-slate-400 py-4">No orders in this range.</p>
           ) : (
-            monthlyTopExpenses.map((expense, index) => (
-              <div key={expense.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate">
-                    #{index + 1} {expense.description}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {new Date(expense.timestamp).toLocaleDateString('en-IN', {
-                      month: 'short',
-                      day: 'numeric',
-                    })}{' '}
-                    {formatTime(expense.timestamp)}
-                  </p>
+            sortedOrders.map((order) => {
+              const cancelReason = getCancelReason(order.orderInstructions);
+              const visibleInstructions = getVisibleInstructions(order.orderInstructions);
+              return (
+                <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-slate-800">#{order.orderNumber}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${order.status === 'pending'
+                        ? 'bg-orange-100 text-orange-700'
+                        : order.status === 'completed'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-rose-100 text-rose-700'
+                        }`}>
+                        {order.status}
+                      </span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${order.paymentStatus === 'paid'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-amber-100 text-amber-700'
+                        }`}>
+                        {order.paymentStatus} / {order.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-slate-800">{formatCurrency(order.total)}</div>
+                  </div>
+
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-slate-600">
+                    <p><strong>Customer:</strong> {order.customerName}</p>
+                    <p><strong>Source:</strong> {order.source ?? 'unknown'}</p>
+                    <p><strong>When:</strong> {formatDateTime(order.timestamp)}</p>
+                  </div>
+
+                  {cancelReason && (
+                    <div className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2 text-xs text-rose-700">
+                      <strong>Cancel reason:</strong> {cancelReason}
+                    </div>
+                  )}
+
+                  {visibleInstructions && (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 whitespace-pre-line">
+                      <strong>Instructions:</strong> {visibleInstructions}
+                    </div>
+                  )}
+
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5 space-y-1.5">
+                    {order.items.map((item, idx) => {
+                      const rawItem = item as unknown as Record<string, unknown>;
+                      const variant = getItemVariant(rawItem);
+                      const lineTotal = getLineTotal(rawItem);
+                      const unitPrice = Number(rawItem.calculatedPrice ?? rawItem.price ?? 0);
+                      return (
+                        <div key={`${order.id}-${idx}`} className="flex items-start justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-slate-700 break-words">
+                              {rawItem.quantity ?? item.quantity} x {rawItem.name ?? item.name}
+                            </p>
+                            <p className="text-slate-500">
+                              {typeof rawItem.category === 'string' ? rawItem.category : item.category}
+                              {variant ? ` | ${variant}` : ''}
+                              {' | '}
+                              {formatCurrency(Number.isFinite(unitPrice) ? unitPrice : 0)} each
+                            </p>
+                          </div>
+                          <p className="font-bold text-slate-700 shrink-0">{formatCurrency(lineTotal)}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <span className="text-sm font-bold text-rose-600 shrink-0">{formatCurrency(expense.amount)}</span>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
 
-      <div className="mt-12 pt-6 border-t border-slate-200">
+      {metrics && (
+        <div className="mb-8 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 flex items-center gap-2">
+          <CalendarDays className="w-4 h-4 text-slate-500" />
+          RPC Metrics synced for business date {metrics.businessDate}
+        </div>
+      )}
+
+      <div className="pt-6 border-t border-slate-200">
         <button
           onClick={() => {
             const confirmation = window.prompt('Type RESET TODAY to permanently clear today\'s orders and month expenses.');

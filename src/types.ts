@@ -26,7 +26,7 @@ export interface Order {
   orderInstructions?: string;
   items: CartItem[];
   total: number;
-  status: 'pending' | 'completed';
+  status: 'pending' | 'completed' | 'cancelled';
   paymentMethod: 'cash' | 'upi' | 'pay_later';
   paymentStatus: 'paid' | 'unpaid';
   timestamp: number;
@@ -71,4 +71,23 @@ export interface DashboardMetrics {
   monthPending: number;
   monthExpenses: number;
   monthNetProfit: number;
+}
+
+export type AnalyticsRange = 'day' | 'week' | 'month' | 'specific_date' | 'specific_month' | 'custom';
+
+export interface AnalyticsFilter {
+  range: AnalyticsRange;
+  specificDate?: string;
+  specificMonth?: string;
+  customStartDate?: string;
+  customEndDate?: string;
+}
+
+export interface UpdateOrderDetailsInput {
+  customerName: string;
+  orderInstructions?: string;
+  items: CartItem[];
+  total: number;
+  paymentMethod: 'cash' | 'upi' | 'pay_later';
+  paymentStatus: 'paid' | 'unpaid';
 }
