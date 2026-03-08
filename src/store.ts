@@ -461,7 +461,7 @@ function orderActionErrorMessage(error: { code?: string; message?: string } | nu
     (error?.code === '22P02' || error?.code === '23514') &&
     lowerMessage.includes('cancel')
   ) {
-    return 'Cancel failed: add "cancelled" to the orders.status enum/check constraint in Supabase.';
+    return 'Cancel failed: orders.status must allow either "canceled" or "cancelled" in Supabase.';
   }
   if (isPermissionError(error)) {
     return 'Staff session required for live order actions.';
@@ -1280,13 +1280,38 @@ export function useStore() {
     }
 
     const nextInstructions = mergeCancelReason(existingOrder.orderInstructions, reason);
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        status: 'cancelled',
-        order_instructions: nextInstructions ?? null,
-      })
-      .eq('id', id);
+    const cancelPayload = {
+      order_instructions: nextInstructions ?? null,
+    };
+
+    const cancelStatusCandidates = ['canceled', 'cancelled'] as const;
+    let error: { code?: string; message?: string } | null = null;
+
+    for (const cancelStatus of cancelStatusCandidates) {
+      const result = await supabase
+        .from('orders')
+        .update({
+          ...cancelPayload,
+          status: cancelStatus,
+        })
+        .eq('id', id);
+
+      error = result.error;
+      if (!error) {
+        break;
+      }
+
+      const lowerMessage = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+      const isCancelStatusConstraintError = (
+        (error.code === '22P02' || error.code === '23514') &&
+        lowerMessage.includes('cancel') &&
+        lowerMessage.includes('status')
+      );
+
+      if (!isCancelStatusConstraintError) {
+        break;
+      }
+    }
 
     if (!error) {
       setOrders((prev) =>

@@ -116,8 +116,8 @@ function OrderCard({
   const explicitParcelNote = extractParcelNote(order.orderInstructions);
   const inferredParcelNote =
     !explicitParcelNote &&
-    order.source === 'customer' &&
-    Math.round(order.total - itemsSubtotal) === 5
+      order.source === 'customer' &&
+      Math.round(order.total - itemsSubtotal) === 5
       ? 'Parcel order (+Rs 5 parcel charge)'
       : null;
   const parcelNote = explicitParcelNote ?? inferredParcelNote;
@@ -242,7 +242,6 @@ function OrderCard({
           {settlingOrderId === order.id ? (
             <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="flex justify-center p-2 bg-white rounded-lg border border-slate-200">
-                <img src="/qr.png" alt="UPI QR" className="w-56 h-56 text-slate-800 mb-2" />
               </div>
               <p className="text-center text-xs font-medium text-slate-500">Scan to pay ₹{order.total}</p>
               <p className="text-center text-[11px] text-slate-500">
