@@ -6,6 +6,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// ─── Local notification (posted from app via postMessage) ────────────────────
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+
+  if (event.data.type === 'SHOW_LOCAL_NOTIFICATION') {
+    const { title, options } = event.data;
+    event.waitUntil(
+      self.registration.showNotification(title ?? 'New Order Received', options ?? {}),
+    );
+  }
+});
+
 // ─── Web Push: show notification ─────────────────────────────────────────────
 self.addEventListener('push', (event) => {
   if (!event.data) return;

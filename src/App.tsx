@@ -10,6 +10,7 @@ import { AuthGate } from './components/AuthGate';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { showLocalNotification } from './lib/pushNotifications';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
@@ -151,20 +152,44 @@ export default function App() {
 
   useEffect(() => {
     if (!incomingOrderNotification) return;
-    if (!orderAlertsEnabled) {
+
+    const isNewOrder = lastPlayedOrderIdRef.current !== incomingOrderNotification.id;
+
+    if (isNewOrder) {
+      lastPlayedOrderIdRef.current = incomingOrderNotification.id;
+
+      // Layer 1: play in-app chime (if alerts enabled)
+      if (orderAlertsEnabled) {
+        playIncomingOrderAlert();
+      }
+
+      // Layer 1: fire OS notification via SW (if push enabled + permission granted)
+      if (pushEnabled && Notification.permission === 'granted') {
+        const order = incomingOrderNotification;
+        const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+        void showLocalNotification('New Order Received', {
+          body: [
+            `#${order.orderNumber} — ${order.customerName}`,
+            `${itemCount} item${itemCount !== 1 ? 's' : ''}`,
+            `Rs ${order.total}`,
+          ].filter(Boolean).join(' | '),
+          tag: `order-${order.id}`,
+          data: { orderId: order.id, tab: 'queue' },
+        });
+      }
+    }
+
+    if (!orderAlertsEnabled && !pushEnabled) {
       clearIncomingOrderNotification();
       return;
     }
-    if (lastPlayedOrderIdRef.current !== incomingOrderNotification.id) {
-      playIncomingOrderAlert();
-      lastPlayedOrderIdRef.current = incomingOrderNotification.id;
-    }
+
     const timeoutId = window.setTimeout(() => {
       clearIncomingOrderNotification();
     }, 4500);
 
     return () => window.clearTimeout(timeoutId);
-  }, [incomingOrderNotification, clearIncomingOrderNotification, orderAlertsEnabled, playIncomingOrderAlert]);
+  }, [incomingOrderNotification, clearIncomingOrderNotification, orderAlertsEnabled, playIncomingOrderAlert, pushEnabled]);
 
   const handleToggleOrderAlerts = useCallback((enabled: boolean) => {
     setOrderAlertsEnabled(enabled);
