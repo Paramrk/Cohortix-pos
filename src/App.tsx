@@ -355,33 +355,37 @@ export default function App() {
       </header>
 
       {/* Mobile Header */}
-      <header className="bg-white border-b border-slate-200 px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)] md:hidden sticky top-0 z-10 flex items-center gap-2 shadow-sm">
-        <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-          <img
-            src={COHORTIX_LOGO_SRC}
-            alt="Cohortix logo"
-            className="h-7 w-auto object-contain"
-          />
-        </div>
-        <h1 className="text-lg font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
-        {canInstallApp && (
+      <header className="bg-white border-b border-slate-200 md:hidden sticky top-0 z-10 shadow-sm"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
+        <div className="flex items-center gap-2 px-3 h-14">
+          <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
+            <img
+              src={COHORTIX_LOGO_SRC}
+              alt="Cohortix logo"
+              className="h-7 w-auto object-contain"
+            />
+          </div>
+          <h1 className="text-base font-bold text-slate-800 tracking-tight flex-1 min-w-0 truncate">Cohortix POS</h1>
+          {canInstallApp && (
+            <button
+              type="button"
+              onClick={() => { void handleInstallApp(); }}
+              className="h-8 px-2.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Install
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => { void handleInstallApp(); }}
-            className="h-9 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center justify-center gap-2 text-xs font-semibold"
+            onClick={() => { void handleSignOut(); }}
+            className="h-8 w-8 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center shrink-0"
+            aria-label="Sign out"
           >
-            <Download className="w-4 h-4" />
-            Install
+            <LogOut className="w-4 h-4" />
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => { void handleSignOut(); }}
-          className={`${canInstallApp ? '' : 'ml-auto '}h-9 w-9 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center`}
-          aria-label="Sign out"
-        >
-          <LogOut className="w-4 h-4" />
-        </button>
+        </div>
       </header>
 
       {serviceAlerts.length > 0 && (
@@ -488,7 +492,9 @@ export default function App() {
       </footer>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center pb-safe mobile-nav-height z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-start z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <NavButton tab="new-order" icon={Store} label="Order" activeTab={activeTab} onSelect={setActiveTab} />
         <NavButton tab="queue" icon={ClipboardList} label="Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
         <NavButton tab="dashboard" icon={BarChart3} label="Stats" activeTab={activeTab} onSelect={setActiveTab} />

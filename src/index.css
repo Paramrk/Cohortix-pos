@@ -2,7 +2,8 @@
 @import "tailwindcss";
 
 :root {
-  --mobile-nav-height: 74px;
+  /* Bottom nav bar is h-14 (56px) — keep in sync with the <nav> element */
+  --mobile-nav-height: 56px;
 }
 
 @theme {
@@ -14,16 +15,14 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Extra bottom padding so scrollable content clears the fixed bottom nav */
   .mobile-bottom-offset {
-    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+    padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 1rem);
   }
 
+  /* Position floating elements (e.g. toast) just above the bottom nav */
   .mobile-floating-offset {
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
-  }
-
-  .mobile-nav-height {
-    min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
   }
 }
 

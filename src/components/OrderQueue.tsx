@@ -586,31 +586,35 @@ export function OrderQueue({
 
   return (
     <div className="mobile-bottom-offset md:pb-0">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-2 flex-nowrap">
         <span
-          className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border ${ordersRealtimeConnected
+          className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border min-w-0 shrink ${ordersRealtimeConnected
             ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
             : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}
         >
           <span
-            className={`w-2 h-2 rounded-full ${ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+            className={`w-2 h-2 rounded-full shrink-0 ${ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
               }`}
           />
-          {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
+          <span className="truncate">
+            {ordersRealtimeConnected ? 'Live' : 'Reconnecting'}
+          </span>
         </span>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* In-app chime toggle */}
           <button
             type="button"
             onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
             aria-pressed={orderAlertsEnabled}
+            title={orderAlertsEnabled ? 'Disable order alerts' : 'Enable order alerts'}
             className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${orderAlertsEnabled
               ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
               : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
           >
-            <span>Order Alerts</span>
+            {/* Label hidden on very small screens */}
+            <span className="hidden sm:inline">Order Alerts</span>
             <span
               className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
                 }`}
@@ -623,7 +627,7 @@ export function OrderQueue({
             <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
           </button>
 
-          {/* Mobile push notification toggle — only shown when the browser supports it */}
+          {/* Push notification toggle — only shown when the browser supports it */}
           {pushStatus !== 'unsupported' && onTogglePush && (
             <button
               type="button"
@@ -645,11 +649,12 @@ export function OrderQueue({
                 }`}
             >
               {pushLoading ? (
-                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
               ) : (
                 <Smartphone className="w-3.5 h-3.5 shrink-0" />
               )}
-              <span>Push to Mobile</span>
+              {/* Label hidden on very small screens to avoid wrapping */}
+              <span className="hidden sm:inline">Push</span>
               <span
                 className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${pushEnabled ? 'bg-indigo-500' : 'bg-slate-300'
                   }`}
@@ -660,7 +665,7 @@ export function OrderQueue({
                 />
               </span>
               <span className="text-[10px]">
-                {pushStatus === 'denied' ? 'Blocked' : pushEnabled ? 'On' : 'Off'}
+                {pushStatus === 'denied' ? 'Off' : pushEnabled ? 'On' : 'Off'}
               </span>
             </button>
           )}
