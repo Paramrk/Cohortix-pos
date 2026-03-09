@@ -66,7 +66,11 @@ export async function requestPermission(): Promise<NotificationPermission> {
  */
 export async function subscribeToPush(): Promise<PushSubscription | null> {
   if (!VAPID_PUBLIC_KEY) {
-    console.warn('[push] VITE_VAPID_PUBLIC_KEY is not set — push notifications are disabled.');
+    // Surface a clear alert so the operator knows what's missing during setup
+    alert(
+      'Push notifications require a VAPID public key.\n\n' +
+      'Add VITE_VAPID_PUBLIC_KEY to your project environment variables, then reload.',
+    );
     return null;
   }
 
