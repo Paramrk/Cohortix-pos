@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Clock, User, QrCode } from 'lucide-react';
+import { CheckCircle2, Clock, User, QrCode, Smartphone } from 'lucide-react';
 import { MenuItem, Order } from '../types';
+import type { PushStatus } from '../hooks/usePushNotifications';
 
 interface OrderQueueProps {
   orders: Order[];
@@ -9,6 +10,11 @@ interface OrderQueueProps {
   ordersPermissionError?: string | null;
   orderAlertsEnabled: boolean;
   onToggleOrderAlerts: (enabled: boolean) => void;
+  // Push notification props (optional — gracefully absent when unsupported)
+  pushEnabled?: boolean;
+  pushStatus?: PushStatus;
+  pushLoading?: boolean;
+  onTogglePush?: (enabled: boolean) => void;
   onUpdateStatus: (id: string, status: 'pending' | 'completed') => void | Promise<void>;
   onUpdatePayment: (id: string, method: 'cash' | 'upi', note?: string) => void | Promise<void>;
   onClearPayment: (id: string, updatedTotal?: number) => void | Promise<void>;
@@ -460,6 +466,10 @@ export function OrderQueue({
   ordersPermissionError,
   orderAlertsEnabled,
   onToggleOrderAlerts,
+  pushEnabled = false,
+  pushStatus = 'unsupported',
+  pushLoading = false,
+  onTogglePush,
   onUpdateStatus,
   onUpdatePayment,
   onClearPayment,
@@ -589,27 +599,72 @@ export function OrderQueue({
           />
           {ordersRealtimeConnected ? 'Live Orders Connected' : 'Reconnecting Live Orders'}
         </span>
-        <button
-          type="button"
-          onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
-          aria-pressed={orderAlertsEnabled}
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${orderAlertsEnabled
-            ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-            : 'bg-slate-100 text-slate-600 border-slate-200'
-            }`}
-        >
-          <span>Order Alerts</span>
-          <span
-            className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+        <div className="flex flex-wrap items-center gap-2">
+          {/* In-app chime toggle */}
+          <button
+            type="button"
+            onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
+            aria-pressed={orderAlertsEnabled}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${orderAlertsEnabled
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+              : 'bg-slate-100 text-slate-600 border-slate-200'
               }`}
           >
+            <span>Order Alerts</span>
             <span
-              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
                 }`}
-            />
-          </span>
-          <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
-        </button>
+            >
+              <span
+                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                  }`}
+              />
+            </span>
+            <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
+          </button>
+
+          {/* Mobile push notification toggle — only shown when the browser supports it */}
+          {pushStatus !== 'unsupported' && onTogglePush && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!pushLoading) onTogglePush(!pushEnabled);
+              }}
+              aria-pressed={pushEnabled}
+              disabled={pushLoading || pushStatus === 'denied'}
+              title={
+                pushStatus === 'denied'
+                  ? 'Notifications blocked in browser settings'
+                  : pushEnabled
+                  ? 'Disable mobile push notifications'
+                  : 'Enable mobile push notifications'
+              }
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${pushEnabled
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+            >
+              {pushLoading ? (
+                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Smartphone className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span>Push to Mobile</span>
+              <span
+                className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${pushEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+                  }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${pushEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                />
+              </span>
+              <span className="text-[10px]">
+                {pushStatus === 'denied' ? 'Blocked' : pushEnabled ? 'On' : 'Off'}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
       {ordersPermissionError && (
         <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

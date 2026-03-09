@@ -9,6 +9,7 @@ import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
+import { usePushNotifications } from './hooks/usePushNotifications';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
@@ -69,6 +70,21 @@ export default function App() {
   });
   const alertAudioContextRef = useRef<AudioContext | null>(null);
   const lastPlayedOrderIdRef = useRef<string | null>(null);
+
+  const handlePushTabSwitch = useCallback((tab: 'queue') => {
+    setActiveTab(tab);
+  }, []);
+
+  const { pushEnabled, pushStatus, pushLoading, enablePush, disablePush } =
+    usePushNotifications(handlePushTabSwitch);
+
+  const handleTogglePush = useCallback(
+    (enabled: boolean) => {
+      if (enabled) void enablePush();
+      else void disablePush();
+    },
+    [enablePush, disablePush],
+  );
   const {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderDetails, cancelOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
@@ -409,6 +425,10 @@ export default function App() {
             ordersPermissionError={ordersPermissionError}
             orderAlertsEnabled={orderAlertsEnabled}
             onToggleOrderAlerts={handleToggleOrderAlerts}
+            pushEnabled={pushEnabled}
+            pushStatus={pushStatus}
+            pushLoading={pushLoading}
+            onTogglePush={handleTogglePush}
             onUpdateStatus={updateOrderStatus}
             onUpdatePayment={updatePayment}
             onClearPayment={clearPayment}
