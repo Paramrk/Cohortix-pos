@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getCurrentSubscription,
   getNotificationPermission,
-  isPushSupported,
+  isNotificationSupported,
   subscribeToPush,
   unsubscribeFromPush,
 } from '../lib/pushNotifications';
@@ -43,46 +43,39 @@ export function usePushNotifications(
 
   // ── Derive initial status on mount ─────────────────────────────────────────
   useEffect(() => {
-    if (!isPushSupported()) {
+    if (!isNotificationSupported()) {
       setPushStatus('unsupported');
       return;
     }
 
     const permission = getNotificationPermission();
+
     if (permission === 'denied') {
       setPushStatus('denied');
       setPushEnabled(false);
       return;
     }
 
-    // Check if there is already an active subscription
-    void getCurrentSubscription().then((sub) => {
-      if (sub) {
+    if (permission === 'granted') {
+      // Already granted — restore saved preference
+      let preferred = false;
+      try { preferred = localStorage.getItem(PUSH_ENABLED_KEY) === 'true'; } catch { /* ignore */ }
+      if (preferred) {
         setPushStatus('subscribed');
         setPushEnabled(true);
-        // Persist preference
-        try { localStorage.setItem(PUSH_ENABLED_KEY, 'true'); } catch { /* ignore */ }
+        // Silently try to re-establish Web Push subscription in background (Layer 2)
+        void getCurrentSubscription().then((sub) => {
+          if (!sub) void subscribeToPush();
+        });
       } else {
-        // Restore preference: if user had it on but SW lost the subscription, re-subscribe
-        let preferred = false;
-        try { preferred = localStorage.getItem(PUSH_ENABLED_KEY) === 'true'; } catch { /* ignore */ }
-        if (preferred && permission === 'granted') {
-          // Silently re-subscribe in the background
-          void subscribeToPush().then((newSub) => {
-            if (newSub) {
-              setPushStatus('subscribed');
-              setPushEnabled(true);
-            } else {
-              setPushStatus('unsubscribed');
-              setPushEnabled(false);
-            }
-          });
-        } else {
-          setPushStatus(permission === 'granted' ? 'unsubscribed' : 'default');
-          setPushEnabled(false);
-        }
+        setPushStatus('unsubscribed');
+        setPushEnabled(false);
       }
-    });
+    } else {
+      // 'default' — not yet asked
+      setPushStatus('default');
+      setPushEnabled(false);
+    }
   }, []);
 
   // ── Handle SW → app messages (notification click → tab switch) ─────────────
@@ -104,20 +97,22 @@ export function usePushNotifications(
     if (pushLoading) return;
     setPushLoading(true);
     try {
-      const sub = await subscribeToPush();
-      if (sub) {
-        setPushStatus('subscribed');
-        setPushEnabled(true);
-        try { localStorage.setItem(PUSH_ENABLED_KEY, 'true'); } catch { /* ignore */ }
-      } else {
-        const perm = getNotificationPermission();
-        if (perm === 'denied') {
-          setPushStatus('denied');
-        } else {
-          setPushStatus('unsubscribed');
-        }
+      // Step 1: request permission (Layer 1 — in-app SW notifications)
+      const permission = await import('../lib/pushNotifications').then(m => m.requestPermission());
+      if (permission !== 'granted') {
+        setPushStatus(permission === 'denied' ? 'denied' : 'default');
         setPushEnabled(false);
+        return;
       }
+
+      // Permission granted — Layer 1 is now active (in-app notifications work)
+      setPushStatus('subscribed');
+      setPushEnabled(true);
+      try { localStorage.setItem(PUSH_ENABLED_KEY, 'true'); } catch { /* ignore */ }
+
+      // Step 2: attempt Web Push subscription (Layer 2 — background push)
+      // This may silently fail if VAPID key not set; Layer 1 still works.
+      void subscribeToPush();
     } catch {
       setPushEnabled(false);
     } finally {
