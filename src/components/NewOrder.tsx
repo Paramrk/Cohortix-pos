@@ -262,7 +262,11 @@ export function NewOrder({
   const handleAdd = useCallback((item: MenuItem, variant?: string) => {
     onClearOrderError();
     setCart((prev) => {
-      const safeVariant = variant === 'Stick' && isStickRestrictedCategory(item.category) ? 'Dish' : variant;
+      // Coerce Stick → Dish if the category or variantMode disallows stick
+      const stickDisallowed =
+        (variant === 'Stick' && isStickRestrictedCategory(item.category)) ||
+        (variant === 'Stick' && item.variantMode === 'dish_only');
+      const safeVariant = stickDisallowed ? 'Dish' : variant;
       const existing = prev.find((i) => i.id === item.id && i.variant === safeVariant);
       if (existing) {
         return prev.map((i) =>
@@ -285,7 +289,10 @@ export function NewOrder({
   const handleRemove = useCallback((item: MenuItem, variant?: string) => {
     onClearOrderError();
     setCart((prev) => {
-      const safeVariant = variant === 'Stick' && isStickRestrictedCategory(item.category) ? 'Dish' : variant;
+      const stickDisallowed =
+        (variant === 'Stick' && isStickRestrictedCategory(item.category)) ||
+        (variant === 'Stick' && item.variantMode === 'dish_only');
+      const safeVariant = stickDisallowed ? 'Dish' : variant;
       const existing = prev.find((i) => i.id === item.id && i.variant === safeVariant);
       if (!existing) return prev;
       if (existing.quantity === 1) {
@@ -700,12 +707,55 @@ export function NewOrder({
 
                   // ---- Stick / Dish variants ----
                   if (item.hasVariants) {
-                    const stickAllowed = !isStickRestrictedCategory(item.category);
+                    // Derive which variants are available for this item
+                    const categoryRestrictsStick = isStickRestrictedCategory(item.category);
+                    const mode = item.variantMode ?? 'both';
+                    const showStick = !categoryRestrictsStick && mode !== 'dish_only';
+                    const showDish = mode !== 'stick_only';
+
                     const stickQty = getCartQuantity(item.id, 'Stick');
                     const dishQty = getCartQuantity(item.id, 'Dish');
-                    const totalQty = stickAllowed ? stickQty + dishQty : dishQty;
+                    const totalQty = (showStick ? stickQty : 0) + (showDish ? dishQty : 0);
                     const dishOnlyPrice = item.dishPrice ?? item.price;
 
+                    // If only one variant is available, render as a simple ADD card (no expand needed)
+                    if (showStick && !showDish) {
+                      return (
+                        <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
+                          <div>
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-slate-500 text-sm font-medium mt-0.5">
+                              Stick · ₹{discountUnitPrice(item.price)}
+                            </div>
+                          </div>
+                          <QuantityControl
+                            quantity={stickQty}
+                            onAdd={() => handleAdd(item, 'Stick')}
+                            onRemove={() => handleRemove(item, 'Stick')}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (!showStick && showDish) {
+                      return (
+                        <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
+                          <div>
+                            <div className="font-bold text-slate-800">{item.name}</div>
+                            <div className="text-slate-500 text-sm font-medium mt-0.5">
+                              Dish · ₹{discountUnitPrice(dishOnlyPrice)}
+                            </div>
+                          </div>
+                          <QuantityControl
+                            quantity={dishQty}
+                            onAdd={() => handleAdd(item, 'Dish')}
+                            onRemove={() => handleRemove(item, 'Dish')}
+                          />
+                        </div>
+                      );
+                    }
+
+                    // Both variants available — expandable card
                     return (
                       <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
                         <div
@@ -715,9 +765,7 @@ export function NewOrder({
                           <div>
                             <div className="font-bold text-slate-800">{item.name}</div>
                             <div className="text-slate-500 text-sm font-medium mt-0.5">
-                              {stickAllowed
-                                ? `₹${discountUnitPrice(item.price)} - ₹${item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}`
-                                : `₹${discountUnitPrice(dishOnlyPrice)}`}
+                              ₹{discountUnitPrice(item.price)} · ₹{item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}
                             </div>
                           </div>
                           {totalQty > 0 && !isExpanded ? (
@@ -733,19 +781,17 @@ export function NewOrder({
 
                         {isExpanded && (
                           <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-4 rounded-b-xl">
-                            {stickAllowed && (
-                              <div className="flex justify-between items-center">
-                                <div>
-                                  <span className="block text-sm font-bold text-slate-700">Stick</span>
-                                  <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
-                                </div>
-                                <QuantityControl
-                                  quantity={stickQty}
-                                  onAdd={() => handleAdd(item, 'Stick')}
-                                  onRemove={() => handleRemove(item, 'Stick')}
-                                />
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="block text-sm font-bold text-slate-700">Stick</span>
+                                <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
                               </div>
-                            )}
+                              <QuantityControl
+                                quantity={stickQty}
+                                onAdd={() => handleAdd(item, 'Stick')}
+                                onRemove={() => handleRemove(item, 'Stick')}
+                              />
+                            </div>
                             <div className="flex justify-between items-center">
                               <div>
                                 <span className="block text-sm font-bold text-slate-700">Dish</span>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, Save, Tag, AlertCircle } from 'lucide-react';
-import { MenuItem, GolaVariant, PricingRule, Order } from '../types';
+import { MenuItem, GolaVariant, PricingRule, Order, VariantMode } from '../types';
 import { isStickRestrictedCategory } from '../utils/category';
 
 interface MenuManagerProps {
@@ -33,6 +33,7 @@ interface FormState {
   dishPrice: number;
   golaVariantPrices: Record<GolaVariant, number>;
   defaultGolaVariant: GolaVariant;
+  variantMode: VariantMode;
 }
 
 const defaultForm = (): FormState => ({
@@ -47,6 +48,7 @@ const defaultForm = (): FormState => ({
     'Plain': 0,
   },
   defaultGolaVariant: 'Plain',
+  variantMode: 'both',
 });
 
 function formToMenuItem(f: FormState): Omit<MenuItem, 'id'> {
@@ -61,18 +63,21 @@ function formToMenuItem(f: FormState): Omit<MenuItem, 'id'> {
       ? f.golaVariantPrices['Plain']
       : (normalizedDishPrice ?? 0);
 
-  // If it has Gola Variants, dishPrice should be undefined to avoid mapping issues.
-  const clearDishPrice = normalizedDishPrice;
+  // Derive effective variantMode: stick-restricted categories are always dish_only regardless
+  const effectiveVariantMode: VariantMode = !stickAllowed
+    ? 'dish_only'
+    : (f.variantMode ?? 'both');
 
   return {
     name: f.name.trim(),
     price: basePrice,
-    dishPrice: clearDishPrice,
+    dishPrice: normalizedDishPrice,
     category: f.category,
     hasVariants: hasStickDish || hasGola,
     hasGolaVariants: hasGola,
     golaVariantPrices: hasGola ? { ...f.golaVariantPrices } : undefined,
     defaultGolaVariant: hasGola ? f.defaultGolaVariant : undefined,
+    variantMode: effectiveVariantMode,
   };
 }
 
@@ -91,6 +96,7 @@ function menuItemToForm(item: MenuItem): FormState {
       'Plain': 0,
     },
     defaultGolaVariant: item.defaultGolaVariant || 'Plain',
+    variantMode: item.variantMode ?? 'both',
   };
 }
 
@@ -732,14 +738,41 @@ export function MenuManager({
 
               <div className="border border-slate-200 rounded-2xl overflow-hidden">
                 {/* Stick / Dish row */}
-                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center gap-2">
-                  <span className="text-base">🍡</span>
-                  <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                    {stickAllowed ? 'Stick / Dish' : 'Dish Only'}
-                  </span>
+                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🍡</span>
+                    <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">
+                      {stickAllowed ? 'Stick / Dish' : 'Dish Only'}
+                    </span>
+                  </div>
+                  {/* Variant mode — only meaningful when stick is allowed and no Gola prices */}
+                  {stickAllowed && !hasGolaPrices && (
+                    <div className="flex items-center gap-1">
+                      {(
+                        [
+                          { value: 'both', label: 'Both' },
+                          { value: 'stick_only', label: 'Stick Only' },
+                          { value: 'dish_only', label: 'Dish Only' },
+                        ] as { value: VariantMode; label: string }[]
+                      ).map(({ value, label }) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setForm((f) => ({ ...f, variantMode: value }))}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                            form.variantMode === value
+                              ? 'bg-indigo-100 text-indigo-800 border-indigo-400'
+                              : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className={`grid gap-px bg-slate-200 ${stickAllowed ? 'grid-cols-1 min-[375px]:grid-cols-2' : 'grid-cols-1'}`}>
-                  {stickAllowed && (
+                <div className={`grid gap-px bg-slate-200 ${stickAllowed && form.variantMode !== 'dish_only' ? 'grid-cols-1 min-[375px]:grid-cols-2' : 'grid-cols-1'}`}>
+                  {stickAllowed && form.variantMode !== 'dish_only' && (
                     <div className="bg-white p-4">
                       <label className="block text-xs font-bold text-slate-500 mb-1">Stick Price (₹)</label>
                       <input
@@ -752,20 +785,22 @@ export function MenuManager({
                       />
                     </div>
                   )}
-                  <div className={`bg-white p-4 transition-opacity ${hasGolaPrices ? 'opacity-30 pointer-events-none' : ''}`}>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">
-                      Dish Price (₹) {hasGolaPrices && <span className="text-[10px] text-rose-500 ml-1 font-normal">(Hidden by Gola Variants)</span>}
-                    </label>
-                    <input
-                      type="number"
-                      value={form.dishPrice || ''}
-                      disabled={hasGolaPrices}
-                      onChange={(e) => setForm({ ...form, dishPrice: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-slate-50 disabled:text-slate-400"
-                      min="0"
-                      placeholder="₹0"
-                    />
-                  </div>
+                  {form.variantMode !== 'stick_only' && (
+                    <div className={`bg-white p-4 transition-opacity ${hasGolaPrices ? 'opacity-30 pointer-events-none' : ''}`}>
+                      <label className="block text-xs font-bold text-slate-500 mb-1">
+                        Dish Price (₹) {hasGolaPrices && <span className="text-[10px] text-rose-500 ml-1 font-normal">(Hidden by Gola Variants)</span>}
+                      </label>
+                      <input
+                        type="number"
+                        value={form.dishPrice || ''}
+                        disabled={hasGolaPrices}
+                        onChange={(e) => setForm({ ...form, dishPrice: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                        min="0"
+                        placeholder="₹0"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Gola variants */}

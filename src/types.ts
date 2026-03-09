@@ -1,5 +1,8 @@
 export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain';
 
+/** Controls which Stick/Dish variants are offered for Regular items. */
+export type VariantMode = 'both' | 'stick_only' | 'dish_only';
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -10,6 +13,8 @@ export interface MenuItem {
   hasGolaVariants?: boolean;
   golaVariantPrices?: Record<GolaVariant, number>;
   defaultGolaVariant?: GolaVariant;
+  /** Restricts which variants the POS shows for this item (Regular category only). Defaults to 'both'. */
+  variantMode?: VariantMode;
 }
 
 export interface CartItem extends MenuItem {
