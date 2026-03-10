@@ -1,4 +1,5 @@
 export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain';
+export type VariantMode = 'both' | 'stick_only' | 'dish_only';
 
 export interface MenuItem {
   id: string;
@@ -10,6 +11,7 @@ export interface MenuItem {
   hasGolaVariants?: boolean;
   golaVariantPrices?: Record<GolaVariant, number>;
   defaultGolaVariant?: GolaVariant;
+  variantMode?: VariantMode;
 }
 
 export interface CartItem extends MenuItem {

@@ -53,20 +53,22 @@ const defaultForm = (): FormState => ({
 
 function formToMenuItem(f: FormState): Omit<MenuItem, 'id'> {
   const stickAllowed = !isStickRestrictedCategory(f.category);
+  // Stick-restricted categories are always dish-only regardless of draft toggle.
+  const effectiveVariantMode: VariantMode = !stickAllowed
+    ? 'dish_only'
+    : (f.variantMode ?? 'both');
+
   const hasGola = GOLA_VARIANTS.some((v) => f.golaVariantPrices[v] > 0);
-  const normalizedStickPrice = stickAllowed ? f.stickPrice : 0;
-  const normalizedDishPrice = hasGola ? undefined : (f.dishPrice > 0 ? f.dishPrice : undefined);
+  const normalizedStickPrice = stickAllowed && effectiveVariantMode !== 'dish_only' ? f.stickPrice : 0;
+  const normalizedDishPrice = hasGola || effectiveVariantMode === 'stick_only'
+    ? undefined
+    : (f.dishPrice > 0 ? f.dishPrice : undefined);
   const hasStickDish = normalizedStickPrice > 0 || (normalizedDishPrice ?? 0) > 0;
   const basePrice = normalizedStickPrice > 0
     ? normalizedStickPrice
     : hasGola
       ? f.golaVariantPrices['Plain']
       : (normalizedDishPrice ?? 0);
-
-  // Derive effective variantMode: stick-restricted categories are always dish_only regardless
-  const effectiveVariantMode: VariantMode = !stickAllowed
-    ? 'dish_only'
-    : (f.variantMode ?? 'both');
 
   return {
     name: f.name.trim(),

@@ -9,6 +9,7 @@ import {
   OrderCreateResult,
   PricingRule,
   UpdateOrderDetailsInput,
+  VariantMode,
 } from './types';
 import { supabase } from './lib/supabase';
 import { recordOrderCreate, recordRealtimeDisconnect } from './lib/telemetry';
@@ -289,16 +290,37 @@ function pricingRuleDishCode(rule: PricingRule) {
 }
 
 function toMenuItem(row: Record<string, unknown>): MenuItem {
+  const rawVariantMode = row.variant_mode;
+  const hasVariants = Boolean(row.has_variants) || false;
+  const hasGolaVariants = Boolean(row.has_gola_variants) || false;
+  const hasDishPrice = row.dish_price != null && toSafeNumber(row.dish_price) > 0;
+  const normalizedCategory = String(row.category ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const categoryForcesDishOnly =
+    normalizedCategory === 'special' ||
+    normalizedCategory === 'special dish' ||
+    normalizedCategory === 'pyali' ||
+    normalizedCategory === 'pyaali';
+
+  const variantMode: VariantMode =
+    rawVariantMode === 'stick_only' || rawVariantMode === 'dish_only' || rawVariantMode === 'both'
+      ? rawVariantMode
+      : categoryForcesDishOnly
+        ? 'dish_only'
+        : (hasVariants && !hasGolaVariants && !hasDishPrice)
+          ? 'stick_only'
+          : 'both';
+
   return {
     id: String(row.id),
     name: String(row.name ?? ''),
     price: toSafeNumber(row.price),
     dishPrice: row.dish_price != null ? toSafeNumber(row.dish_price) : undefined,
     category: String(row.category ?? 'Regular'),
-    hasVariants: Boolean(row.has_variants) || false,
-    hasGolaVariants: Boolean(row.has_gola_variants) || false,
+    hasVariants,
+    hasGolaVariants,
     golaVariantPrices: row.gola_variant_prices ? (row.gola_variant_prices as any) : undefined,
     defaultGolaVariant: row.default_gola_variant ? (row.default_gola_variant as any) : undefined,
+    variantMode,
   };
 }
 
@@ -1379,6 +1401,7 @@ export function useStore() {
       has_gola_variants: item.hasGolaVariants ?? false,
       gola_variant_prices: item.hasGolaVariants ? item.golaVariantPrices ?? null : null,
       default_gola_variant: item.hasGolaVariants ? item.defaultGolaVariant ?? 'Plain' : null,
+      variant_mode: item.variantMode ?? 'both',
       shop_id: SHOP_ID,
     };
     const rowLegacy = {
@@ -1393,6 +1416,7 @@ export function useStore() {
     if (
       isMissingColumnError(error, 'gola_variant_prices') ||
       isMissingColumnError(error, 'has_gola_variants') ||
+      isMissingColumnError(error, 'variant_mode') ||
       isMissingColumnError(error, 'shop_id')
     ) {
       ({ data, error } = await supabase.from('menu_items').insert(rowLegacy).select().single());
@@ -1415,6 +1439,7 @@ export function useStore() {
       has_gola_variants: updatedItem.hasGolaVariants ?? false,
       gola_variant_prices: updatedItem.hasGolaVariants ? updatedItem.golaVariantPrices ?? null : null,
       default_gola_variant: updatedItem.hasGolaVariants ? updatedItem.defaultGolaVariant ?? 'Plain' : null,
+      variant_mode: updatedItem.variantMode ?? 'both',
       shop_id: SHOP_ID,
     };
     const rowLegacy = {
@@ -1432,6 +1457,7 @@ export function useStore() {
     if (
       isMissingColumnError(error, 'gola_variant_prices') ||
       isMissingColumnError(error, 'has_gola_variants') ||
+      isMissingColumnError(error, 'variant_mode') ||
       isMissingColumnError(error, 'shop_id')
     ) {
       ({ error } = await supabase
