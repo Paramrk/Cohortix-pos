@@ -17,6 +17,7 @@ interface MenuManagerProps {
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
 
 const DEFAULT_CATEGORIES = ['Regular', 'Special Dish', 'Pyali'] as const;
+const CUSTOM_CATEGORIES_STORAGE_KEY = 'pos_custom_categories_v1';
 
 const CATEGORY_ICONS: Record<string, string> = {
   Regular: '\u{1F361}',
@@ -146,12 +147,21 @@ export function MenuManager({
   const [savingBulk, setSavingBulk] = useState(false);
   const [bulkError, setBulkError] = useState('');
 
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(CUSTOM_CATEGORIES_STORAGE_KEY);
+      if (stored) setCustomCategories(JSON.parse(stored) as string[]);
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     setPricingDraft(pricingRule);
   }, [pricingRule]);
 
   const allCategories = Array.from(
-    new Set([...DEFAULT_CATEGORIES, ...menuItems.map((i) => i.category)])
+    new Set([...DEFAULT_CATEGORIES, ...customCategories, ...menuItems.map((i) => i.category)])
   );
 
   const hasGolaPrices = GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);
@@ -380,6 +390,42 @@ export function MenuManager({
     } finally {
       setRenamingCategory(null);
     }
+  };
+
+  const handleDeleteCategory = (categoryToRemove: string) => {
+    const count = menuItems.filter((i) => i.category === categoryToRemove).length;
+    if (count > 0) {
+      alert(`Cannot delete "${categoryToRemove}" — it still has ${count} item(s). Move or delete them first.`);
+      return;
+    }
+    if (!window.confirm(`Delete empty category "${categoryToRemove}"?`)) return;
+    setCustomCategories((prev) => {
+      const next = prev.filter((c) => c !== categoryToRemove);
+      localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+    if (form.category === categoryToRemove) {
+      setForm((prev) => ({ ...prev, category: DEFAULT_CATEGORIES[0] }));
+    }
+  };
+
+  const handleAddNewCategory = () => {
+    const input = window.prompt('Enter new category name:');
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    const existing = allCategories.find((c) => c.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      alert('This category already exists.');
+      setForm((prev) => ({ ...prev, category: existing }));
+      return;
+    }
+    setCustomCategories((prev) => {
+      const next = [...prev, trimmed];
+      localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+    setForm((prev) => ({ ...prev, category: trimmed }));
   };
 
   return (
@@ -728,6 +774,13 @@ export function MenuManager({
                     {CATEGORY_ICONS[cat] ?? '\u{1F361}'} {cat}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={handleAddNewCategory}
+                  className="px-4 py-2 rounded-xl text-sm font-bold border-2 border-dashed border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-400 transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-4 h-4" /> Add New
+                </button>
               </div>
             </div>
 
@@ -897,14 +950,14 @@ export function MenuManager({
       <div className="space-y-8">
         {allCategories.map((category) => {
           const items = menuItems.filter((item) => item.category === category);
-          if (items.length === 0) return null;
           return (
-            <div key={category} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+            <div key={category} className={`bg-white rounded-2xl shadow-sm border ${items.length === 0 ? 'border-dashed border-slate-300 opacity-70' : 'border-slate-100'} overflow-hidden`}>
               <div className="bg-slate-50 px-6 py-3 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
                   <Tag className="w-4 h-4 text-slate-400" />
-                  <h3 className="font-bold text-slate-700 uppercase tracking-wider text-sm">
+                  <h3 className="font-bold text-slate-700 uppercase tracking-wider text-sm flex items-center gap-2">
                     {CATEGORY_ICONS[category] ?? '\u{1F361}'} {category}
+                    {items.length === 0 && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">EMPTY</span>}
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -916,6 +969,15 @@ export function MenuManager({
                   >
                     {renamingCategory === category ? 'Renaming...' : 'Rename Category'}
                   </button>
+                  {items.length === 0 && !DEFAULT_CATEGORIES.includes(category) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(category)}
+                      className="border border-rose-200 text-rose-600 rounded-lg px-3 py-1.5 text-xs font-medium bg-white hover:bg-rose-50 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete Empty Category
+                    </button>
+                  )}
                   {category === 'Regular' && (
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Set Default Variant:</span>
@@ -965,6 +1027,11 @@ export function MenuManager({
                   )}
                 </div>
               </div>
+              {items.length === 0 ? (
+                <div className="px-6 py-8 text-center text-slate-400 text-sm">
+                  No items in this category yet. Add a menu item above and select this category.
+                </div>
+              ) : (
               <div className="divide-y divide-slate-100">
                 {items.map((item) => {
                   const draftForm = bulkDrafts[item.id];
@@ -1080,6 +1147,7 @@ export function MenuManager({
                   );
                 })}
               </div>
+              )}
             </div>
           );
         })}
