@@ -58,3 +58,71 @@ export interface OrderCreateResult {
   source?: 'pos' | 'customer';
   clientRequestId?: string;
 }
+
+export type ChatRole = 'user' | 'assistant';
+
+export interface AIChatMessage {
+  role: ChatRole;
+  content: string;
+}
+
+export interface AICartSnapshotItem {
+  id: string;
+  name: string;
+  quantity: number;
+  variant?: string;
+  calculatedPrice: number;
+}
+
+export interface AISuggestedItem {
+  menuItemId: string;
+  name: string;
+  quantity: number;
+  variant?: string;
+  reason: string;
+}
+
+export interface AIOrderDraft {
+  items: AISuggestedItem[];
+  isParcel: boolean;
+  customerName?: string;
+  orderInstructions?: string;
+  summary: string;
+}
+
+export type CustomerAIProvider = 'gemini' | 'openai' | 'nvidia' | 'sambanova' | 'ollama';
+
+export type CustomerAIIntent =
+  | 'answer'
+  | 'recommend'
+  | 'cart_update'
+  | 'order_draft'
+  | 'order_confirm'
+  | 'clarify';
+
+export interface CustomerAIRequest {
+  shopId: 'main';
+  language: 'en' | 'gu';
+  provider?: CustomerAIProvider;
+  customerName?: string;
+  message: string;
+  conversation: AIChatMessage[];
+  cart: AICartSnapshotItem[];
+  pendingOrderDraft?: AIOrderDraft | null;
+}
+
+export interface CustomerAIResponse {
+  reply: string;
+  language: 'en' | 'gu';
+  intent: CustomerAIIntent;
+  suggestions: AISuggestedItem[];
+  orderDraft?: AIOrderDraft | null;
+  requiresName: boolean;
+  requiresDoubleConfirmation: boolean;
+}
+
+export interface CustomerAIProviderConfig {
+  enabled: boolean;
+  availableProviders: CustomerAIProvider[];
+  defaultProvider: CustomerAIProvider | null;
+}

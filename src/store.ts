@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AnalyticsFilter,
   AnalyticsRange,
+  CustomerAppSettings,
   DashboardMetrics,
   Expense,
   MenuItem,
@@ -39,6 +40,10 @@ const DEFAULT_PRICING_RULE: PricingRule = {
   discountPercent: 0,
   bogoEnabled: false,
   bogoType: 'b2g1',
+};
+const DEFAULT_CUSTOMER_APP_SETTINGS: CustomerAppSettings = {
+  shopId: SHOP_ID,
+  customerAIEnabled: true,
 };
 
 function clampDiscountPercent(value: number) {
@@ -463,6 +468,20 @@ function isMissingColumnError(error: { code?: string; message?: string } | null,
   );
 }
 
+function isMissingRelationError(error: { code?: string; message?: string } | null, relation: string) {
+  if (!error) return false;
+  if (error.code === 'PGRST205' || error.code === '42P01') return true;
+  return typeof error.message === 'string' && error.message.includes(relation);
+}
+
+function toCustomerAppSettings(row: Record<string, unknown> | null | undefined): CustomerAppSettings {
+  if (!row) return DEFAULT_CUSTOMER_APP_SETTINGS;
+  return {
+    shopId: typeof row.shop_id === 'string' && row.shop_id.trim() ? row.shop_id : SHOP_ID,
+    customerAIEnabled: row.customer_ai_enabled !== false,
+  };
+}
+
 function isPermissionError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
   if (error.code === '42501') return true;
@@ -497,6 +516,9 @@ export function useStore() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [pricingRule, setPricingRule] = useState<PricingRule>(() => readPricingRule());
+  const [customerAppSettings, setCustomerAppSettings] = useState<CustomerAppSettings>(DEFAULT_CUSTOMER_APP_SETTINGS);
+  const [customerAppSettingsLoading, setCustomerAppSettingsLoading] = useState(true);
+  const [customerAppSettingsSaving, setCustomerAppSettingsSaving] = useState(false);
   const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
   const [ordersRealtimeConnected, setOrdersRealtimeConnected] = useState(false);
   const [ordersPermissionError, setOrdersPermissionError] = useState<string | null>(null);
@@ -594,6 +616,32 @@ export function useStore() {
       console.error('Failed to insert pricing rule:', insertError);
       throw new Error(menuWriteErrorMessage(insertError));
     }
+  }, []);
+
+  const refreshCustomerAppSettings = useCallback(async () => {
+    setCustomerAppSettingsLoading(true);
+
+    const { data, error } = await supabase
+      .from('customer_app_settings')
+      .select('shop_id, customer_ai_enabled')
+      .eq('shop_id', SHOP_ID)
+      .maybeSingle();
+
+    if (isMissingRelationError(error, 'customer_app_settings')) {
+      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
+      setCustomerAppSettingsLoading(false);
+      return;
+    }
+
+    if (error && !isPermissionError(error)) {
+      console.error('Failed to fetch customer app settings', error.code, error.message);
+      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
+      setCustomerAppSettingsLoading(false);
+      return;
+    }
+
+    setCustomerAppSettings(toCustomerAppSettings(data as Record<string, unknown> | null));
+    setCustomerAppSettingsLoading(false);
   }, []);
 
   const refreshDashboardMetrics = useCallback(async () => {
@@ -785,8 +833,18 @@ export function useStore() {
       .eq('shop_id', SHOP_ID)
       .gte('timestamp', monthStartMs)
       .order('timestamp', { ascending: false });
+    const customerAppSettingsReq = supabase
+      .from('customer_app_settings')
+      .select('shop_id, customer_ai_enabled')
+      .eq('shop_id', SHOP_ID)
+      .maybeSingle();
 
-    const [menuRes, ordersRes, expensesRes] = await Promise.all([menuReq, ordersReq, expensesReq]);
+    const [menuRes, ordersRes, expensesRes, customerAppSettingsRes] = await Promise.all([
+      menuReq,
+      ordersReq,
+      expensesReq,
+      customerAppSettingsReq,
+    ]);
 
     let menuData = menuRes.data;
     if (isMissingColumnError(menuRes.error, 'shop_id')) {
@@ -853,6 +911,21 @@ export function useStore() {
     } else if (expensesRes.error && !isPermissionError(expensesRes.error)) {
       console.error('Failed to fetch expenses', expensesRes.error.code, expensesRes.error.message);
     }
+
+    if (isMissingRelationError(customerAppSettingsRes.error, 'customer_app_settings')) {
+      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
+    } else if (customerAppSettingsRes.error && !isPermissionError(customerAppSettingsRes.error)) {
+      console.error(
+        'Failed to fetch customer app settings',
+        customerAppSettingsRes.error.code,
+        customerAppSettingsRes.error.message,
+      );
+      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
+    } else {
+      setCustomerAppSettings(toCustomerAppSettings(customerAppSettingsRes.data as Record<string, unknown> | null));
+    }
+
+    setCustomerAppSettingsLoading(false);
 
     setLoading(false);
     void refreshDashboardMetrics();
@@ -1009,10 +1082,36 @@ export function useStore() {
         }
       });
 
+    const customerSettingsChannel = supabase
+      .channel('pos-customer-app-settings')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'customer_app_settings' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const deletedShopId = payload.old?.shop_id as string | undefined;
+            if (!deletedShopId || deletedShopId !== SHOP_ID) return;
+            setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
+            return;
+          }
+
+          const row = payload.new as Record<string, unknown> | null;
+          if (!row) return;
+          if (typeof row.shop_id === 'string' && row.shop_id !== SHOP_ID) return;
+          setCustomerAppSettings(toCustomerAppSettings(row));
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+          recordRealtimeDisconnect('pos', 'pos-customer-app-settings', status);
+        }
+      });
+
     return () => {
       setOrdersRealtimeConnected(false);
       void supabase.removeChannel(ordersChannel);
       void supabase.removeChannel(menuChannel);
+      void supabase.removeChannel(customerSettingsChannel);
     };
   }, [refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
 
@@ -1569,6 +1668,35 @@ export function useStore() {
     localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
     setPricingRule(merged);
   }, [persistPricingRuleToSupabase, pricingRule]);
+
+  const updateCustomerAIEnabled = useCallback(async (enabled: boolean) => {
+    setCustomerAppSettingsSaving(true);
+    await supabase.auth.refreshSession().catch(() => undefined);
+
+    const { data, error } = await supabase
+      .from('customer_app_settings')
+      .upsert(
+        {
+          shop_id: SHOP_ID,
+          customer_ai_enabled: enabled,
+        },
+        { onConflict: 'shop_id' },
+      )
+      .select('shop_id, customer_ai_enabled')
+      .single();
+
+    setCustomerAppSettingsSaving(false);
+
+    if (isMissingRelationError(error, 'customer_app_settings')) {
+      throw new Error('Customer AI settings table is missing. Apply the latest Supabase migration first.');
+    }
+
+    if (error) {
+      throw new Error(isPermissionError(error) ? 'Staff sign-in required to manage customer AI.' : error.message);
+    }
+
+    setCustomerAppSettings(toCustomerAppSettings(data as Record<string, unknown>));
+  }, []);
   const analyticsRange = analyticsFilter.range;
 
   return {
@@ -1577,6 +1705,9 @@ export function useStore() {
     expenses,
     loading,
     pricingRule,
+    customerAppSettings,
+    customerAppSettingsLoading,
+    customerAppSettingsSaving,
     ordersRealtimeConnected,
     ordersPermissionError,
     incomingOrderNotification,
@@ -1597,6 +1728,7 @@ export function useStore() {
     updatePayment,
     clearPayment,
     updatePricingRule,
+    updateCustomerAIEnabled,
     addExpense,
     clearData,
     addMenuItem,
@@ -1608,5 +1740,6 @@ export function useStore() {
     refreshAll: fetchAll,
     refreshDashboardMetrics,
     refreshAnalytics,
+    refreshCustomerAppSettings,
   };
 }

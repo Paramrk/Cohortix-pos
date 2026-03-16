@@ -14,7 +14,8 @@
     "lint:customer": "npm --prefix nilkanth-ice-dish-gola run lint",
     "build:customer": "npm --prefix nilkanth-ice-dish-gola run build",
     "lint:all": "npm run lint:pos && npm run lint:customer",
-    "build:all": "npm run build:pos && npm run build:customer"
+    "build:all": "npm run build:pos && npm run build:customer",
+    "import:menu-ai-profiles": "tsx scripts/import-menu-ai-profiles.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

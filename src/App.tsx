@@ -7,6 +7,7 @@ import { OrderQueue } from './components/OrderQueue';
 import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
+import { AIChatBot } from './components/AIChatBot';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -90,6 +91,7 @@ export default function App() {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderDetails, cancelOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
     addMenuItem, updateMenuItem, renameMenuCategory, deleteMenuItem, updatePricingRule,
+    customerAppSettings, customerAppSettingsLoading, customerAppSettingsSaving, updateCustomerAIEnabled,
     incomingOrderNotification, clearIncomingOrderNotification,
     ordersRealtimeConnected, pricingRule,
     orderPending, orderError, clearOrderError,
@@ -472,6 +474,9 @@ export default function App() {
           <Dashboard
             onAddExpense={addExpense}
             onClearData={clearData}
+            customerAIEnabled={customerAppSettings.customerAIEnabled}
+            customerAISettingsLoading={customerAppSettingsLoading}
+            customerAISettingsSaving={customerAppSettingsSaving}
             metrics={dashboardMetrics}
             metricsLoading={dashboardMetricsLoading}
             analyticsFilter={analyticsFilter}
@@ -483,6 +488,7 @@ export default function App() {
             onChangeAnalyticsFilter={(nextFilter) => {
               void refreshAnalytics(nextFilter);
             }}
+            onToggleCustomerAI={updateCustomerAIEnabled}
           />
         )}
         {activeTab === 'menu' && (
@@ -549,6 +555,8 @@ export default function App() {
           </div>
         </button>
       )}
+
+      <AIChatBot />
     </div>
   );
 }

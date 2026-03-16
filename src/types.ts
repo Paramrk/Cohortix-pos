@@ -54,6 +54,11 @@ export interface PricingRule {
   bogoType: 'b1g1' | 'b2g1';
 }
 
+export interface CustomerAppSettings {
+  shopId: string;
+  customerAIEnabled: boolean;
+}
+
 export interface OrderCreateResult {
   orderId: string;
   orderNumber: number;
