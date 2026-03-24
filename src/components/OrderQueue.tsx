@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Clock, User, QrCode, Smartphone } from 'lucide-react';
 import { MenuItem, Order } from '../types';
 import type { PushStatus } from '../hooks/usePushNotifications';
+import { useLanguage } from '../lib/i18n';
 
 interface OrderQueueProps {
   orders: Order[];
@@ -113,6 +114,7 @@ function OrderCard({
   onUpdatePayment,
   onClearPayment,
 }: OrderCardProps) {
+  const { t } = useLanguage();
   const [showClearOptions, setShowClearOptions] = useState(false);
   const [showCancelOptions, setShowCancelOptions] = useState(false);
   const [pendingDueAmount, setPendingDueAmount] = useState(String(order.total));
@@ -190,7 +192,7 @@ function OrderCard({
               : 'bg-slate-100 text-slate-500'
               }`}
           >
-            {isUnpaid ? 'UNPAID' : order.paymentMethod}
+            {isUnpaid ? t('queue.unpaid') || 'UNPAID' : order.paymentMethod}
           </div>
         </div>
       </div>
@@ -221,17 +223,17 @@ function OrderCard({
                   {item.quantity}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium break-words block">{item.name}</span>
+                  <span className="font-medium break-words block">{t(item.name)}</span>
                   {(category || variant) && (
                     <span className="mt-1 flex flex-wrap gap-1.5">
                       {category && (
                         <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded shrink-0">
-                          {category}
+                          {t(category)}
                         </span>
                       )}
                       {variant && (
                         <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
-                          {variant}
+                          {t(variant)}
                         </span>
                       )}
                     </span>
@@ -280,7 +282,7 @@ function OrderCard({
                   disabled={isBusy}
                   className="flex-1 min-h-11 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
-                  Cash Received
+                  {t('queue.cash')}
                 </button>
                 <button
                   onClick={async () => {
@@ -295,7 +297,7 @@ function OrderCard({
                   disabled={isBusy}
                   className="flex-1 min-h-11 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
                 >
-                  UPI Received
+                  {t('queue.upi')}
                 </button>
               </div>
               <button
@@ -314,7 +316,7 @@ function OrderCard({
               onClick={() => setSettlingOrderId(order.id)}
               className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
             >
-              Settle Payment (₹{order.total})
+              {t('queue.settlePayment')} (₹{order.total})
             </button>
           )}
         </div>
@@ -343,7 +345,7 @@ function OrderCard({
                 disabled={isBusy}
                 className="w-full min-h-11 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
               >
-                Clear With Amount
+                {t('queue.clearWithAmount')}
               </button>
               <button
                 onClick={() => setShowClearOptions(false)}
@@ -359,7 +361,7 @@ function OrderCard({
             onClick={() => setShowClearOptions(true)}
             className="w-full min-h-11 bg-amber-100 text-amber-800 hover:bg-amber-200 py-2.5 rounded-xl font-bold text-sm transition-colors"
           >
-            {isUnpaid ? 'Adjust Due Amount' : 'Clear / Adjust Payment'}
+            {isUnpaid ? t('queue.adjustDueAmount') : t('queue.clearPayment')}
           </button>
         )}
       </div>
@@ -372,7 +374,7 @@ function OrderCard({
             disabled={isBusy}
             className="w-full min-h-11 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
           >
-            Modify Order
+            {t('queue.modifyOrder')}
           </button>
           {showCancelOptions ? (
             <div className="space-y-2 bg-rose-50 border border-rose-200 rounded-xl p-3">
@@ -396,7 +398,7 @@ function OrderCard({
                   disabled={isBusy}
                   className="w-full min-h-11 bg-rose-500 hover:bg-rose-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
                 >
-                  Confirm Cancel
+                  {t('queue.confirmCancel')}
                 </button>
                 <button
                   type="button"
@@ -404,7 +406,7 @@ function OrderCard({
                   disabled={isBusy}
                   className="w-full min-h-11 bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
                 >
-                  Keep Order
+                  {t('queue.keepOrder')}
                 </button>
               </div>
             </div>
@@ -415,7 +417,7 @@ function OrderCard({
               disabled={isBusy}
               className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
             >
-              Cancel Order
+              {t('queue.cancelOrder')}
             </button>
           )}
         </div>
@@ -430,7 +432,7 @@ function OrderCard({
           className="w-full min-h-12 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-sm"
         >
           <CheckCircle2 className="w-5 h-5" />
-          Mark as Done
+          {t('queue.markCompleted') || 'Mark as Done'}
         </button>
       ) : (
         <button
@@ -440,7 +442,7 @@ function OrderCard({
           disabled={isBusy}
           className="w-full min-h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition-colors"
         >
-          Undo (Move to Pending)
+          {t('queue.undoPending')}
         </button>
       )}
       {hasError && (
@@ -451,7 +453,7 @@ function OrderCard({
             onClick={() => onRetryAction(order.id)}
             className="mt-2 text-xs font-bold uppercase tracking-wide text-rose-700 hover:text-rose-800"
           >
-            Retry Last Action
+            {t('queue.retryAction')}
           </button>
         </div>
       )}
@@ -476,6 +478,7 @@ export function OrderQueue({
   onCancelOrder,
   onRequestModifyOrder,
 }: OrderQueueProps) {
+  const { t } = useLanguage();
   const [settlingOrderId, setSettlingOrderId] = useState<string | null>(null);
   const [mobileSection, setMobileSection] = useState<'pending' | 'payment-pending' | 'completed'>('pending');
   const [pendingRenderLimit, setPendingRenderLimit] = useState(40);
@@ -598,7 +601,7 @@ export function OrderQueue({
               }`}
           />
           <span className="truncate">
-            {ordersRealtimeConnected ? 'Live' : 'Reconnecting'}
+            {ordersRealtimeConnected ? t('queue.live') : t('queue.reconnecting')}
           </span>
         </span>
         <div className="flex items-center gap-2 shrink-0">
@@ -614,7 +617,7 @@ export function OrderQueue({
               }`}
           >
             {/* Label hidden on very small screens */}
-            <span className="hidden sm:inline">Order Alerts</span>
+            <span className="hidden sm:inline">{t('queue.orderAlerts')}</span>
             <span
               className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
                 }`}
@@ -624,7 +627,7 @@ export function OrderQueue({
                   }`}
               />
             </span>
-            <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
+            <span className="text-[10px]">{orderAlertsEnabled ? t('queue.on') : t('queue.off')}</span>
           </button>
 
           {/* Push notification toggle — only shown when the browser supports it */}
@@ -654,7 +657,7 @@ export function OrderQueue({
                 <Smartphone className="w-3.5 h-3.5 shrink-0" />
               )}
               {/* Label hidden on very small screens to avoid wrapping */}
-              <span className="hidden sm:inline">Push</span>
+              <span className="hidden sm:inline">{t('queue.push')}</span>
               <span
                 className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${pushEnabled ? 'bg-indigo-500' : 'bg-slate-300'
                   }`}
@@ -665,7 +668,7 @@ export function OrderQueue({
                 />
               </span>
               <span className="text-[10px]">
-                {pushStatus === 'denied' ? 'Off' : pushEnabled ? 'On' : 'Off'}
+                {pushStatus === 'denied' ? t('queue.off') : pushEnabled ? t('queue.on') : t('queue.off')}
               </span>
             </button>
           )}
@@ -685,7 +688,7 @@ export function OrderQueue({
             : 'text-slate-500'
             }`}
         >
-          Preparing ({pendingOrders.length})
+          {t('queue.preparing')} ({pendingOrders.length})
         </button>
         <button
           onClick={() => setMobileSection('payment-pending')}
@@ -694,7 +697,7 @@ export function OrderQueue({
             : 'text-slate-500'
             }`}
         >
-          Payment ({paymentPendingOrders.length})
+          {t('queue.payment')} ({paymentPendingOrders.length})
         </button>
         <button
           onClick={() => setMobileSection('completed')}
@@ -703,7 +706,7 @@ export function OrderQueue({
             : 'text-slate-500'
             }`}
         >
-          Completed ({paidCompletedOrders.length})
+          {t('queue.completed')} ({paidCompletedOrders.length})
         </button>
       </div>
 
@@ -713,14 +716,14 @@ export function OrderQueue({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-orange-500 animate-pulse"></span>
-              Preparing ({pendingOrders.length})
+              {t('queue.preparing')} ({pendingOrders.length})
             </h2>
           </div>
           <div className="space-y-4">
             {pendingOrders.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
                 <div className="text-4xl mb-2">🧊</div>
-                <p className="font-medium">No pending orders. Time to relax!</p>
+                <p className="font-medium">{t('queue.noPendingOrders')}</p>
               </div>
             ) : (
               visiblePendingOrders.map((order) => (
@@ -757,12 +760,12 @@ export function OrderQueue({
         <div className={`md:hidden ${mobileSection === 'payment-pending' ? 'block' : 'hidden'}`}>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-            Payment Pending ({paymentPendingOrders.length})
+            {t('queue.payment')} ({paymentPendingOrders.length})
           </h2>
           <div className="space-y-4">
             {paymentPendingOrders.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="font-medium">No unpaid completed orders.</p>
+                <p className="font-medium">{t('queue.noPaymentPendingOrders')}</p>
               </div>
             ) : (
               paymentPendingOrders.map((order) => (
@@ -790,12 +793,12 @@ export function OrderQueue({
         <div className={`md:hidden ${mobileSection === 'completed' ? 'block' : 'hidden'}`}>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            Completed ({paidCompletedOrders.length})
+            {t('queue.completed')} ({paidCompletedOrders.length})
           </h2>
           <div className="space-y-4">
             {paidCompletedOrders.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="font-medium">No completed orders yet.</p>
+                <p className="font-medium">{t('queue.noCompletedOrders')}</p>
               </div>
             ) : (
               paidCompletedOrders.map((order) => (
@@ -823,12 +826,12 @@ export function OrderQueue({
         <div className="hidden flex-1 md:block md:max-w-md">
           <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
             <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            Completed ({completedOrders.length})
+            {t('queue.completed')} ({completedOrders.length})
           </h2>
           <div className="space-y-4">
             {completedOrders.length === 0 ? (
               <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border-2 border-dashed border-slate-200">
-                <p className="font-medium">No completed orders yet.</p>
+                <p className="font-medium">{t('queue.noCompletedOrders')}</p>
               </div>
             ) : (
               completedOrders.map((order) => (

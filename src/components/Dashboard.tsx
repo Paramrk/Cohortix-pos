@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AIInsights } from './AIInsights';
+
 import {
   AlertTriangle,
   CalendarDays,
@@ -17,13 +17,11 @@ import {
   Wallet,
 } from 'lucide-react';
 import type { AnalyticsFilter, AnalyticsRange, DashboardMetrics, Expense, Order } from '../types';
+import { useLanguage } from '../lib/i18n';
 
 interface DashboardProps {
   onAddExpense: (desc: string, amount: number) => void;
   onClearData: () => void;
-  customerAIEnabled: boolean;
-  customerAISettingsLoading?: boolean;
-  customerAISettingsSaving?: boolean;
   metrics?: DashboardMetrics | null;
   metricsLoading?: boolean;
   analyticsFilter: AnalyticsFilter;
@@ -33,7 +31,6 @@ interface DashboardProps {
   analyticsLoading?: boolean;
   analyticsError?: string | null;
   onChangeAnalyticsFilter: (filter: AnalyticsFilter | AnalyticsRange) => void;
-  onToggleCustomerAI: (enabled: boolean) => Promise<void>;
 }
 
 const CANCEL_REASON_PREFIX = 'Cancel reason:';
@@ -142,7 +139,7 @@ function parseInstructionLines(instructions?: string) {
   return (instructions ?? '')
     .split('\n')
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter((line) => line && !line.startsWith('ORDER_META:'));
 }
 
 function getCancelReason(instructions?: string) {
@@ -172,9 +169,6 @@ interface ProductSalesRow {
 export function Dashboard({
   onAddExpense,
   onClearData,
-  customerAIEnabled,
-  customerAISettingsLoading = false,
-  customerAISettingsSaving = false,
   metrics,
   metricsLoading = false,
   analyticsFilter,
@@ -184,15 +178,15 @@ export function Dashboard({
   analyticsLoading = false,
   analyticsError,
   onChangeAnalyticsFilter,
-  onToggleCustomerAI,
 }: DashboardProps) {
+  const { t } = useLanguage();
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [specificDate, setSpecificDate] = useState(analyticsFilter.specificDate ?? '');
   const [specificMonth, setSpecificMonth] = useState(analyticsFilter.specificMonth ?? '');
   const [customStartDate, setCustomStartDate] = useState(analyticsFilter.customStartDate ?? '');
   const [customEndDate, setCustomEndDate] = useState(analyticsFilter.customEndDate ?? '');
-  const [customerAIError, setCustomerAIError] = useState<string | null>(null);
+
 
   React.useEffect(() => {
     setSpecificDate(analyticsFilter.specificDate ?? '');
@@ -330,16 +324,16 @@ export function Dashboard({
   }, [activeOrders]);
 
   const rangeLabel = analyticsRange === 'day'
-    ? 'Day'
+    ? t('dashboard.day')
     : analyticsRange === 'week'
-      ? 'Week'
+      ? t('dashboard.week')
       : analyticsRange === 'month'
-        ? 'Month'
+        ? t('dashboard.month')
         : analyticsRange === 'specific_date'
-          ? 'Specific Date'
+          ? t('dashboard.specificDate')
           : analyticsRange === 'specific_month'
-            ? 'Specific Month'
-            : 'Custom Range';
+            ? t('dashboard.specificMonth')
+            : t('dashboard.customRange');
   const visibleMetricsLoading = metricsLoading || analyticsLoading;
 
   const handleAddExpense = (e: React.FormEvent) => {
@@ -351,75 +345,13 @@ export function Dashboard({
     setExpenseAmount('');
   };
 
-  const handleToggleCustomerAI = async (enabled: boolean) => {
-    setCustomerAIError(null);
-    try {
-      await onToggleCustomerAI(enabled);
-    } catch (error) {
-      setCustomerAIError(error instanceof Error ? error.message : 'Failed to update customer AI.');
-    }
-  };
-
   return (
     <div className="mobile-bottom-offset md:pb-0 max-w-6xl mx-auto">
-      <AIInsights
-        rangeLabel={rangeLabel}
-        totalSales={totalSales}
-        collected={collected}
-        netProfit={netProfit}
-        orderCount={orderCount}
-        itemsSold={itemsSold}
-        avgOrderValue={avgOrderValue}
-        expensesTotal={expensesTotal}
-        collectionRate={collectionRate}
-        topProducts={productStats.topRows}
-        bottomProducts={productStats.bottomRows}
-        paymentBreakdown={paymentBreakdown}
-        analyticsOrders={analyticsOrders}
-        analyticsExpenses={analyticsExpenses}
-      />
-      <div className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-slate-900">
-              <Sparkles className="h-5 w-5 text-emerald-600" />
-              <h3 className="text-base font-bold">Customer AI Access</h3>
-            </div>
-            <p className="mt-2 text-sm text-slate-600">
-              Turn the customer Ask AI tab on or off for the live menu. When off, the customer app hides the tab and the Edge Function rejects AI requests.
-            </p>
-            <p className={`mt-2 text-sm font-semibold ${customerAIEnabled ? 'text-emerald-700' : 'text-amber-700'}`}>
-              Status: {customerAIEnabled ? 'Enabled for customers' : 'Disabled for customers'}
-            </p>
-            {customerAIError && (
-              <p className="mt-2 text-sm font-medium text-rose-700">{customerAIError}</p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => { void handleToggleCustomerAI(true); }}
-              disabled={customerAISettingsLoading || customerAISettingsSaving || customerAIEnabled}
-              className="min-h-11 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              {customerAISettingsLoading || customerAISettingsSaving ? 'Saving...' : 'Enable AI'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { void handleToggleCustomerAI(false); }}
-              disabled={customerAISettingsLoading || customerAISettingsSaving || !customerAIEnabled}
-              className="min-h-11 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
-            >
-              {customerAISettingsLoading || customerAISettingsSaving ? 'Saving...' : 'Disable AI'}
-            </button>
-          </div>
-        </div>
-      </div>
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-5">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">POS Analytics</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">{t('dashboard.title')}</h2>
           <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-full">
-            {rangeLabel} View
+            {rangeLabel}
           </span>
         </div>
         <span className="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
@@ -436,7 +368,7 @@ export function Dashboard({
             : 'text-slate-500 hover:bg-slate-50'
             }`}
         >
-          Day
+          {t('dashboard.day')}
         </button>
         <button
           type="button"
@@ -446,7 +378,7 @@ export function Dashboard({
             : 'text-slate-500 hover:bg-slate-50'
             }`}
         >
-          Week
+          {t('dashboard.week')}
         </button>
         <button
           type="button"
@@ -456,13 +388,13 @@ export function Dashboard({
             : 'text-slate-500 hover:bg-slate-50'
             }`}
         >
-          Month
+          {t('dashboard.month')}
         </button>
       </div>
 
       <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Specific Date</p>
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">{t('dashboard.specificDate')}</p>
           <input
             type="date"
             value={specificDate}
@@ -474,11 +406,11 @@ export function Dashboard({
             onClick={() => onChangeAnalyticsFilter({ range: 'specific_date', specificDate })}
             className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
           >
-            Apply Date
+            {t('dashboard.applyDate')}
           </button>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Specific Month</p>
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">{t('dashboard.specificMonth')}</p>
           <input
             type="month"
             value={specificMonth}
@@ -490,11 +422,11 @@ export function Dashboard({
             onClick={() => onChangeAnalyticsFilter({ range: 'specific_month', specificMonth })}
             className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
           >
-            Apply Month
+            {t('dashboard.applyMonth')}
           </button>
         </div>
         <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2">
-          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">Custom Date Range</p>
+          <p className="text-xs uppercase tracking-wide font-bold text-slate-500">{t('dashboard.customRange')}</p>
           <div className="grid grid-cols-2 gap-2">
             <input
               type="date"
@@ -514,7 +446,7 @@ export function Dashboard({
             onClick={() => onChangeAnalyticsFilter({ range: 'custom', customStartDate, customEndDate })}
             className="w-full h-10 rounded-lg bg-indigo-100 text-indigo-700 text-sm font-bold hover:bg-indigo-200"
           >
-            Apply Range
+            {t('dashboard.applyRange')}
           </button>
         </div>
       </div>
@@ -522,7 +454,7 @@ export function Dashboard({
       {visibleMetricsLoading && (
         <div className="mb-4 text-xs font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 inline-flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-          Refreshing analytics
+          {t('dashboard.refreshing')}
         </div>
       )}
 
@@ -534,29 +466,29 @@ export function Dashboard({
 
       <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 font-medium text-sm mb-1">Collected</p>
+          <p className="text-slate-500 font-medium text-sm mb-1">{t('dashboard.collected')}</p>
           <h3 className="text-2xl sm:text-3xl font-bold text-indigo-600">{formatCurrency(collected)}</h3>
           <p className="text-xs text-slate-400 mt-2">Total billed: {formatCurrency(totalSales)}</p>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 font-medium text-sm mb-1">Expenses</p>
+          <p className="text-slate-500 font-medium text-sm mb-1">{t('dashboard.expenses')}</p>
           <h3 className="text-2xl sm:text-3xl font-bold text-rose-600">{formatCurrency(expensesTotal)}</h3>
           <p className="text-xs text-slate-400 mt-2">{sortedExpenses.length} expense entries</p>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 font-medium text-sm mb-1">Net Profit</p>
+          <p className="text-slate-500 font-medium text-sm mb-1">{t('dashboard.netProfit')}</p>
           <h3 className={`text-2xl sm:text-3xl font-bold ${netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {formatCurrency(netProfit)}
           </h3>
           <p className="text-xs text-slate-400 mt-2">Based on collected amount</p>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 font-medium text-sm mb-1">Orders</p>
+          <p className="text-slate-500 font-medium text-sm mb-1">{t('dashboard.orders')}</p>
           <h3 className="text-2xl sm:text-3xl font-bold text-slate-800">{orderCount}</h3>
           <p className="text-xs text-slate-400 mt-2">{itemsSold} items sold</p>
         </div>
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-          <p className="text-slate-500 font-medium text-sm mb-1">Avg Order Value</p>
+          <p className="text-slate-500 font-medium text-sm mb-1">{t('dashboard.avgOrderValue')}</p>
           <h3 className="text-2xl sm:text-3xl font-bold text-blue-600">{formatCurrency(avgOrderValue)}</h3>
           <p className="text-xs text-slate-400 mt-2">{orderCount > 0 ? `${orderCount} orders` : 'No orders yet'}</p>
         </div>
@@ -564,7 +496,7 @@ export function Dashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
-          <h3 className="text-base font-bold text-slate-800">Payment Breakdown</h3>
+          <h3 className="text-base font-bold text-slate-800">{t('dashboard.paymentBreakdown')}</h3>
           <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-slate-700">
               <Wallet className="w-4 h-4 text-emerald-600" />
@@ -598,7 +530,7 @@ export function Dashboard({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
-          <h3 className="text-base font-bold text-slate-800">Order Flow</h3>
+          <h3 className="text-base font-bold text-slate-800">{t('dashboard.orderFlow')}</h3>
           <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
             <div className="flex items-center gap-2 text-slate-700">
               <CircleDot className="w-4 h-4 text-orange-500" />
@@ -631,7 +563,7 @@ export function Dashboard({
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 space-y-3">
-          <h3 className="text-base font-bold text-slate-800">Collection Health</h3>
+          <h3 className="text-base font-bold text-slate-800">{t('dashboard.collectionHealth')}</h3>
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Collection Rate</p>
             <p className="text-xl font-bold text-emerald-600 mt-1">{collectionRate}%</p>
@@ -657,21 +589,21 @@ export function Dashboard({
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-base font-bold text-slate-800 mb-3">Product Sales Highlights</h3>
+          <h3 className="text-base font-bold text-slate-800 mb-3">{t('dashboard.productSales')}</h3>
           {productStats.allRows.length === 0 ? (
             <p className="text-sm text-slate-400 py-3">No product sales in this range.</p>
           ) : (
             <div className="space-y-3">
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-emerald-700">Most Sold</p>
-                <p className="text-sm font-bold text-emerald-800 mt-1">{productStats.mostSold?.name}</p>
+                <p className="text-sm font-bold text-emerald-800 mt-1">{productStats.mostSold?.name ? t(productStats.mostSold.name) : ''}</p>
                 <p className="text-xs text-emerald-700 mt-1">
                   Qty: {productStats.mostSold?.quantitySold ?? 0} | Orders: {productStats.mostSold?.orderCount ?? 0}
                 </p>
               </div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                 <p className="text-xs uppercase tracking-wide text-amber-700">Least Sold</p>
-                <p className="text-sm font-bold text-amber-800 mt-1">{productStats.leastSold?.name}</p>
+                <p className="text-sm font-bold text-amber-800 mt-1">{productStats.leastSold?.name ? t(productStats.leastSold.name) : ''}</p>
                 <p className="text-xs text-amber-700 mt-1">
                   Qty: {productStats.leastSold?.quantitySold ?? 0} | Orders: {productStats.leastSold?.orderCount ?? 0}
                 </p>
@@ -681,7 +613,7 @@ export function Dashboard({
         </div>
 
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-base font-bold text-slate-800 mb-3">Product Order Count</h3>
+          <h3 className="text-base font-bold text-slate-800 mb-3">{t('dashboard.productOrderCount')}</h3>
           {productStats.allRows.length === 0 ? (
             <p className="text-sm text-slate-400 py-3">No product stats available.</p>
           ) : (
@@ -691,7 +623,7 @@ export function Dashboard({
                 <div className="space-y-2">
                   {productStats.topRows.slice(0, 5).map((row) => (
                     <div key={`top-${row.key}`} className="flex items-center justify-between text-xs gap-2">
-                      <span className="font-medium text-slate-700 truncate">{row.name}</span>
+                      <span className="font-medium text-slate-700 truncate">{t(row.name)}</span>
                       <span className="font-bold text-slate-800 shrink-0">{row.quantitySold} qty ({row.orderCount} orders)</span>
                     </div>
                   ))}
@@ -702,7 +634,7 @@ export function Dashboard({
                 <div className="space-y-2">
                   {productStats.bottomRows.slice(0, 5).map((row) => (
                     <div key={`bottom-${row.key}`} className="flex items-center justify-between text-xs gap-2">
-                      <span className="font-medium text-slate-700 truncate">{row.name}</span>
+                      <span className="font-medium text-slate-700 truncate">{t(row.name)}</span>
                       <span className="font-bold text-slate-800 shrink-0">{row.quantitySold} qty ({row.orderCount} orders)</span>
                     </div>
                   ))}
@@ -717,7 +649,7 @@ export function Dashboard({
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <PlusCircle className="w-5 h-5 text-rose-500" />
-            Add Expense
+            {t('dashboard.addExpense')}
           </h3>
           <form onSubmit={handleAddExpense} className="space-y-4">
             <div>
@@ -755,7 +687,7 @@ export function Dashboard({
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
             <Receipt className="w-5 h-5 text-slate-500" />
-            {rangeLabel} Expenses
+            {rangeLabel} {t('dashboard.expenses')}
           </h3>
           <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2">
             {sortedExpenses.length === 0 ? (
@@ -778,7 +710,7 @@ export function Dashboard({
       <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-100 mb-8">
         <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center gap-2">
           <ShoppingCart className="w-4 h-4 text-indigo-600" />
-          Orders List (Detailed)
+          {t('dashboard.ordersList')}
         </h3>
         <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
           {sortedOrders.length === 0 ? (
@@ -792,6 +724,11 @@ export function Dashboard({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-slate-800">#{order.orderNumber}</span>
+                      {order.serviceMode === 'dine_in' && order.tableNumber && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                          Table {order.tableNumber}
+                        </span>
+                      )}
                       <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${order.status === 'pending'
                         ? 'bg-orange-100 text-orange-700'
                         : order.status === 'completed'

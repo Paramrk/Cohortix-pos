@@ -2,22 +2,27 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AnalyticsFilter,
   AnalyticsRange,
-  CustomerAppSettings,
+  CartItem,
   DashboardMetrics,
   Expense,
   MenuItem,
   Order,
   OrderCreateResult,
-  PricingRule,
   UpdateOrderDetailsInput,
-  VariantMode,
 } from './types';
 import { supabase } from './lib/supabase';
 import { recordOrderCreate, recordRealtimeDisconnect } from './lib/telemetry';
+import {
+  buildMenuConfigPayload,
+  buildOrderInstructions,
+  calculateCartLinePrice,
+  parseOrderInstructions,
+  selectedOptionsFromUnknown,
+  toCatalogItem,
+  toOrderLinePayload,
+  type MenuConfigRow,
+} from './lib/restaurant';
 
-const PRICING_RULE_STORAGE_KEY = 'pos_pricing_rule_v1';
-const PRICING_RULE_MENU_NAME = '__pricing_rule__';
-const PRICING_RULE_MENU_CATEGORY = '__system__';
 const ORDER_SYNC_INTERVAL_MS = 12000;
 const ORDER_RECONCILIATION_DELAYS_MS = [300, 900, 2000] as const;
 const SHOP_ID = 'main';
@@ -36,20 +41,8 @@ const IST_WEEKDAY_INDEX: Record<string, number> = {
 };
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_MONTH_RE = /^\d{4}-\d{2}$/;
-const DEFAULT_PRICING_RULE: PricingRule = {
-  discountPercent: 0,
-  bogoEnabled: false,
-  bogoType: 'b2g1',
-};
-const DEFAULT_CUSTOMER_APP_SETTINGS: CustomerAppSettings = {
-  shopId: SHOP_ID,
-  customerAIEnabled: true,
-};
 
-function clampDiscountPercent(value: number) {
-  if (!Number.isFinite(value)) return 0;
-  return Math.min(100, Math.max(0, Math.round(value)));
-}
+
 
 function toSafeNumber(value: unknown) {
   const parsed = Number(value);
@@ -57,22 +50,57 @@ function toSafeNumber(value: unknown) {
 }
 
 function parseOrderItems(value: unknown): Order['items'] {
-  if (Array.isArray(value)) {
-    return value as Order['items'];
-  }
+  const rawItems = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? (() => {
+        try {
+          const parsed = JSON.parse(value);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })()
+      : [];
 
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      if (Array.isArray(parsed)) {
-        return parsed as Order['items'];
-      }
-    } catch {
-      return [];
-    }
-  }
+  return rawItems.map((entry, index) => {
+    const row = entry as Record<string, unknown>;
+    const legacyVariant =
+      typeof row.variant === 'string'
+        ? row.variant
+        : typeof row.variantName === 'string'
+          ? row.variantName
+          : typeof row.variant_name === 'string'
+            ? row.variant_name
+            : '';
+    const selectedOptions = selectedOptionsFromUnknown(row.selectedOptions ?? row.selected_options);
+    const normalizedOptions = selectedOptions.length > 0 || !legacyVariant.trim()
+      ? selectedOptions
+      : [{
+        groupId: 'legacy-variant',
+        groupName: 'Option',
+        optionId: legacyVariant.trim().toLowerCase().replace(/\s+/g, '-'),
+        optionName: legacyVariant.trim(),
+        priceDelta: 0,
+      }];
+    const quantity = Math.max(1, toSafeNumber(row.quantity) || 1);
+    const basePrice = toSafeNumber(row.price);
+    const calculatedPrice =
+      toSafeNumber(row.calculatedPrice ?? row.calculated_price) ||
+      calculateCartLinePrice(basePrice, normalizedOptions);
 
-  return [];
+    return {
+      id: String(row.id ?? `item-${index + 1}`),
+      cartItemId: typeof row.cartItemId === 'string' ? row.cartItemId : `saved-${index}-${String(row.id ?? 'item')}`,
+      name: String(row.name ?? `Item ${index + 1}`),
+      category: String(row.category ?? 'Menu'),
+      price: basePrice,
+      quantity,
+      calculatedPrice,
+      lineTotal: toSafeNumber(row.lineTotal ?? row.line_total) || calculatedPrice * quantity,
+      selectedOptions: normalizedOptions,
+    } satisfies CartItem;
+  });
 }
 
 function normalizeOrderStatus(value: unknown): Order['status'] {
@@ -258,75 +286,10 @@ function businessDateFromTimestamp(timestamp: number) {
   return getBusinessDateString(new Date(timestamp));
 }
 
-function readPricingRule(): PricingRule {
-  try {
-    const raw = localStorage.getItem(PRICING_RULE_STORAGE_KEY);
-    if (!raw) return DEFAULT_PRICING_RULE;
-    const parsed = JSON.parse(raw) as Partial<PricingRule>;
-    const normalizedBogoType = parsed.bogoType === 'b1g1' ? 'b1g1' : 'b2g1';
-    return {
-      discountPercent: clampDiscountPercent(parsed.discountPercent ?? 0),
-      bogoEnabled: Boolean(parsed.bogoEnabled),
-      bogoType: normalizedBogoType,
-    };
-  } catch {
-    return DEFAULT_PRICING_RULE;
-  }
-}
 
-function isPricingRuleMenuRow(row: Record<string, unknown>) {
-  return row.name === PRICING_RULE_MENU_NAME && row.category === PRICING_RULE_MENU_CATEGORY;
-}
 
-function pricingRuleFromMenuRow(row: Record<string, unknown>): PricingRule {
-  const modeCode = Number(row.dish_price ?? 0);
-  const bogoEnabled = modeCode > 0;
-  const bogoType = modeCode === 1 ? 'b1g1' : 'b2g1';
-  return {
-    discountPercent: clampDiscountPercent(Number(row.price ?? 0)),
-    bogoEnabled,
-    bogoType,
-  };
-}
-
-function pricingRuleDishCode(rule: PricingRule) {
-  if (!rule.bogoEnabled) return 0;
-  return rule.bogoType === 'b1g1' ? 1 : 2;
-}
-
-function toMenuItem(row: Record<string, unknown>): MenuItem {
-  const rawVariantMode = row.variant_mode;
-  const hasVariants = Boolean(row.has_variants) || false;
-  const hasGolaVariants = Boolean(row.has_gola_variants) || false;
-  const hasDishPrice = row.dish_price != null && toSafeNumber(row.dish_price) > 0;
-  const normalizedCategory = String(row.category ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const categoryForcesDishOnly =
-    normalizedCategory === 'special' ||
-    normalizedCategory === 'special dish' ||
-    normalizedCategory === 'pyali' ||
-    normalizedCategory === 'pyaali';
-
-  const variantMode: VariantMode =
-    rawVariantMode === 'stick_only' || rawVariantMode === 'dish_only' || rawVariantMode === 'both'
-      ? rawVariantMode
-      : categoryForcesDishOnly
-        ? 'dish_only'
-        : (hasVariants && !hasGolaVariants && !hasDishPrice)
-          ? 'stick_only'
-          : 'both';
-
-  return {
-    id: String(row.id),
-    name: String(row.name ?? ''),
-    price: toSafeNumber(row.price),
-    dishPrice: row.dish_price != null ? toSafeNumber(row.dish_price) : undefined,
-    category: String(row.category ?? 'Regular'),
-    hasVariants,
-    hasGolaVariants,
-    golaVariantPrices: row.gola_variant_prices ? (row.gola_variant_prices as any) : undefined,
-    defaultGolaVariant: row.default_gola_variant ? (row.default_gola_variant as any) : undefined,
-    variantMode,
-  };
+function toMenuItem(row: Record<string, unknown>, config?: MenuConfigRow | null): MenuItem {
+  return toCatalogItem(row, config);
 }
 
 function toOrder(row: Record<string, unknown>): Order {
@@ -344,11 +307,20 @@ function toOrder(row: Record<string, unknown>): Order {
       : businessDateFromTimestamp(timestamp);
 
   const source = row.source === 'pos' || row.source === 'customer' ? row.source : undefined;
+  const parsedInstructions = parseOrderInstructions(rawInstructions || undefined, String(row.customer_name ?? 'Walk-in'));
+  const rowTableNumber = toSafeNumber(row.table_number);
+  const tableNumber =
+    Number.isFinite(rowTableNumber) && rowTableNumber > 0
+      ? Math.floor(rowTableNumber)
+      : parsedInstructions.tableNumber;
 
   return {
     id: String(row.id),
     orderNumber: toSafeNumber(row.order_number),
-    customerName: String(row.customer_name ?? 'Guest'),
+    customerName: String(row.customer_name ?? 'Walk-in'),
+    displayLabel: parsedInstructions.displayLabel,
+    serviceMode: parsedInstructions.serviceMode,
+    tableNumber,
     orderInstructions: rawInstructions || undefined,
     items: parseOrderItems(row.items),
     total: toSafeNumber(row.total),
@@ -390,6 +362,18 @@ function toDashboardMetrics(payload: Record<string, unknown>): DashboardMetrics 
     monthPending: toSafeNumber(payload.month_pending),
     monthExpenses: toSafeNumber(payload.month_expenses),
     monthNetProfit: toSafeNumber(payload.month_net_profit),
+  };
+}
+
+function summarizeOrdersAndExpenses(orders: Order[], expenses: Expense[]) {
+  const activeOrders = orders.filter((order) => order.status !== 'cancelled');
+  const paidOrders = activeOrders.filter((order) => order.paymentStatus === 'paid');
+  const pendingUnpaidOrders = activeOrders.filter((order) => order.status === 'pending' && order.paymentStatus === 'unpaid');
+  return {
+    totalSales: activeOrders.reduce((sum, order) => sum + order.total, 0),
+    collected: paidOrders.reduce((sum, order) => sum + order.total, 0),
+    pending: pendingUnpaidOrders.reduce((sum, order) => sum + order.total, 0),
+    expensesTotal: expenses.reduce((sum, expense) => sum + expense.amount, 0),
   };
 }
 
@@ -446,14 +430,29 @@ function mergeCancelReason(existingInstructions: string | undefined, cancelReaso
 }
 
 function toOrderItemsPayload(items: Order['items']) {
-  return items.map((item) => ({
-    id: item.id,
+  return items.map(toOrderLinePayload);
+}
+
+function toLegacyMenuRow(item: Omit<MenuItem, 'id'>) {
+  const sizeGroup = item.optionGroups.find((group) => group.type === 'size');
+  const sortedSizeOptions = sizeGroup
+    ? [...sizeGroup.options].sort((a, b) => Number(b.isDefault) - Number(a.isDefault))
+    : [];
+  const alternateSizeOption = sortedSizeOptions.find((option) => !option.isDefault) ?? sortedSizeOptions[1];
+  const dishPrice = alternateSizeOption ? Math.max(0, item.price + alternateSizeOption.priceDelta) : null;
+
+  return {
     name: item.name,
+    price: item.price,
+    dish_price: dishPrice,
     category: item.category,
-    quantity: item.quantity,
-    price: item.calculatedPrice,
-    variantName: item.variant,
-  }));
+    has_variants: item.optionGroups.length > 0,
+    has_gola_variants: false,
+    gola_variant_prices: null,
+    default_gola_variant: null,
+    variant_mode: item.optionGroups.length > 0 ? 'both' : 'stick_only',
+    shop_id: SHOP_ID,
+  };
 }
 
 function wait(ms: number) {
@@ -474,13 +473,19 @@ function isMissingRelationError(error: { code?: string; message?: string } | nul
   return typeof error.message === 'string' && error.message.includes(relation);
 }
 
-function toCustomerAppSettings(row: Record<string, unknown> | null | undefined): CustomerAppSettings {
-  if (!row) return DEFAULT_CUSTOMER_APP_SETTINGS;
-  return {
-    shopId: typeof row.shop_id === 'string' && row.shop_id.trim() ? row.shop_id : SHOP_ID,
-    customerAIEnabled: row.customer_ai_enabled !== false,
-  };
+function isMissingFunctionError(error: { code?: string; message?: string } | null, functionName: string) {
+  if (!error) return false;
+  if (error.code === 'PGRST202') return true;
+  return typeof error.message === 'string' && error.message.includes(`function public.${functionName}`);
 }
+
+function extractMissingColumnName(error: { code?: string; message?: string } | null) {
+  if (!error || typeof error.message !== 'string') return null;
+  const match = error.message.match(/'([^']+)' column/);
+  return match?.[1] ?? null;
+}
+
+
 
 function isPermissionError(error: { code?: string; message?: string } | null) {
   if (!error) return false;
@@ -515,10 +520,7 @@ export function useStore() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [pricingRule, setPricingRule] = useState<PricingRule>(() => readPricingRule());
-  const [customerAppSettings, setCustomerAppSettings] = useState<CustomerAppSettings>(DEFAULT_CUSTOMER_APP_SETTINGS);
-  const [customerAppSettingsLoading, setCustomerAppSettingsLoading] = useState(true);
-  const [customerAppSettingsSaving, setCustomerAppSettingsSaving] = useState(false);
+
   const [incomingOrderNotification, setIncomingOrderNotification] = useState<Order | null>(null);
   const [ordersRealtimeConnected, setOrdersRealtimeConnected] = useState(false);
   const [ordersPermissionError, setOrdersPermissionError] = useState<string | null>(null);
@@ -534,138 +536,102 @@ export function useStore() {
   const localInsertRequestIdsRef = useRef<Map<string, number>>(new Map());
   const analyticsFilterRef = useRef<AnalyticsFilter>({ range: 'day' });
 
-  const persistPricingRuleToSupabase = useCallback(async (rule: PricingRule) => {
-    await supabase.auth.refreshSession().catch(() => undefined);
 
-    const rowWithGola = {
-      name: PRICING_RULE_MENU_NAME,
-      category: PRICING_RULE_MENU_CATEGORY,
-      price: clampDiscountPercent(rule.discountPercent),
-      dish_price: pricingRuleDishCode(rule),
-      has_variants: false,
-      has_gola_variants: false,
-      gola_variant_prices: null,
-      shop_id: SHOP_ID,
-    };
-    const rowLegacy = {
-      name: PRICING_RULE_MENU_NAME,
-      category: PRICING_RULE_MENU_CATEGORY,
-      price: clampDiscountPercent(rule.discountPercent),
-      dish_price: pricingRuleDishCode(rule),
-      has_variants: false,
-    };
-
-    // 1. Look up the pricing rule row WITHOUT shop_id filter first
-    const { data: existingRows, error: selectError } = await supabase
-      .from('menu_items')
-      .select('id')
-      .eq('name', PRICING_RULE_MENU_NAME)
-      .eq('category', PRICING_RULE_MENU_CATEGORY)
-      .limit(1);
-
-    if (selectError) {
-      console.error('Failed to query existing pricing rule:', selectError);
-      throw new Error(menuWriteErrorMessage(selectError));
-    }
-
-    const existingId = existingRows?.[0]?.id as string | undefined;
-
-    if (existingId) {
-      // Update logic — use count to detect silent RLS blocks (0 rows = permission denied)
-      let { error: updateError, count: updateCount } = await supabase
-        .from('menu_items')
-        .update(rowWithGola)
-        .eq('id', existingId)
-        .select('id');
-
-      if (updateError && (isMissingColumnError(updateError, 'gola_variant_prices') || isMissingColumnError(updateError, 'has_gola_variants') || isMissingColumnError(updateError, 'shop_id'))) {
-        // Fallback update for older schema
-        const { error: legacyUpdateError, data: legacyData } = await supabase
-          .from('menu_items')
-          .update(rowLegacy)
-          .eq('id', existingId)
-          .select('id');
-        if (legacyUpdateError) {
-          console.error('[persistPricingRule] legacy update error:', legacyUpdateError.code, legacyUpdateError.message);
-          throw new Error(menuWriteErrorMessage(legacyUpdateError));
-        }
-        if (!legacyData || legacyData.length === 0) {
-          console.error('[persistPricingRule] 0 rows updated - RLS blocked write. is_staff() returned false. Sign out and sign back in.');
-          throw new Error('Offer update denied. Please sign out and sign back in to refresh permissions.');
-        }
-      } else if (updateError) {
-        console.error('[persistPricingRule] update error:', updateError.code, updateError.message);
-        throw new Error(menuWriteErrorMessage(updateError));
-      } else if (!updateCount && updateCount !== null) {
-        // Sanity check when count returned
-      }
-      return;
-    }
-
-    // Insert logic
-    let { error: insertError } = await supabase.from('menu_items').insert(rowWithGola);
-
-    if (insertError && (isMissingColumnError(insertError, 'gola_variant_prices') || isMissingColumnError(insertError, 'has_gola_variants') || isMissingColumnError(insertError, 'shop_id'))) {
-      // Fallback insert for older schema
-      const { error: legacyInsertError } = await supabase.from('menu_items').insert(rowLegacy);
-      if (legacyInsertError) {
-        console.error('Failed to insert pricing rule with legacy schema:', legacyInsertError);
-        throw new Error(menuWriteErrorMessage(legacyInsertError));
-      }
-    } else if (insertError) {
-      console.error('Failed to insert pricing rule:', insertError);
-      throw new Error(menuWriteErrorMessage(insertError));
-    }
-  }, []);
-
-  const refreshCustomerAppSettings = useCallback(async () => {
-    setCustomerAppSettingsLoading(true);
-
-    const { data, error } = await supabase
-      .from('customer_app_settings')
-      .select('shop_id, customer_ai_enabled')
-      .eq('shop_id', SHOP_ID)
-      .maybeSingle();
-
-    if (isMissingRelationError(error, 'customer_app_settings')) {
-      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
-      setCustomerAppSettingsLoading(false);
-      return;
-    }
-
-    if (error && !isPermissionError(error)) {
-      console.error('Failed to fetch customer app settings', error.code, error.message);
-      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
-      setCustomerAppSettingsLoading(false);
-      return;
-    }
-
-    setCustomerAppSettings(toCustomerAppSettings(data as Record<string, unknown> | null));
-    setCustomerAppSettingsLoading(false);
-  }, []);
 
   const refreshDashboardMetrics = useCallback(async () => {
     setDashboardMetricsLoading(true);
     const startedAt = performance.now();
-    const { data, error } = await supabase.rpc('get_dashboard_metrics', {
-      p_business_date: getBusinessDateString(),
-      p_shop_id: SHOP_ID,
-    });
+    const businessDate = getBusinessDateString();
+    const dayBounds = getSpecificDateBounds(businessDate) ?? getAnalyticsRangeBounds('day');
+    const monthBounds = getAnalyticsRangeBounds('month');
 
-    if (!error && data) {
-      const raw = Array.isArray(data) ? data[0] : data;
-      if (raw && typeof raw === 'object') {
-        setDashboardMetrics(toDashboardMetrics(raw as Record<string, unknown>));
+    let ordersData: Record<string, unknown>[] | null = null;
+    let ordersError: { code?: string; message?: string } | null = null;
+    let expensesData: Record<string, unknown>[] | null = null;
+    let expensesError: { code?: string; message?: string } | null = null;
+
+    const monthOrdersResult = await supabase
+      .from('orders')
+      .select('*')
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', monthBounds.start)
+      .lte('timestamp', monthBounds.end)
+      .order('timestamp', { ascending: false });
+
+    ordersData = monthOrdersResult.data as Record<string, unknown>[] | null;
+    ordersError = monthOrdersResult.error;
+
+    if (isMissingColumnError(ordersError, 'shop_id')) {
+      const fallback = await supabase
+        .from('orders')
+        .select('*')
+        .gte('timestamp', monthBounds.start)
+        .lte('timestamp', monthBounds.end)
+        .order('timestamp', { ascending: false });
+      ordersData = fallback.data as Record<string, unknown>[] | null;
+      ordersError = fallback.error;
+    }
+
+    const monthExpensesResult = await supabase
+      .from('expenses')
+      .select('*')
+      .eq('shop_id', SHOP_ID)
+      .gte('timestamp', monthBounds.start)
+      .lte('timestamp', monthBounds.end)
+      .order('timestamp', { ascending: false });
+
+    expensesData = monthExpensesResult.data as Record<string, unknown>[] | null;
+    expensesError = monthExpensesResult.error;
+
+    if (isMissingColumnError(expensesError, 'shop_id')) {
+      const fallback = await supabase
+        .from('expenses')
+        .select('*')
+        .gte('timestamp', monthBounds.start)
+        .lte('timestamp', monthBounds.end)
+        .order('timestamp', { ascending: false });
+      expensesData = fallback.data as Record<string, unknown>[] | null;
+      expensesError = fallback.error;
+    }
+
+    if (!ordersError && !expensesError && ordersData && expensesData) {
+      const monthOrders = ordersData.map((row) => toOrder(row));
+      const monthExpenses = expensesData.map((row) => toExpense(row));
+      const dayOrders = monthOrders.filter((order) => order.businessDate === businessDate);
+      const dayExpenses = monthExpenses.filter((expense) => expense.timestamp >= dayBounds.start && expense.timestamp <= dayBounds.end);
+      const todaySummary = summarizeOrdersAndExpenses(dayOrders, dayExpenses);
+      const monthSummary = summarizeOrdersAndExpenses(monthOrders, monthExpenses);
+
+      setDashboardMetrics({
+        businessDate,
+        shopId: SHOP_ID,
+        todayTotalSales: todaySummary.totalSales,
+        todayCollected: todaySummary.collected,
+        todayPending: todaySummary.pending,
+        todayExpenses: todaySummary.expensesTotal,
+        todayNetProfit: todaySummary.collected - todaySummary.expensesTotal,
+        monthTotalSales: monthSummary.totalSales,
+        monthCollected: monthSummary.collected,
+        monthPending: monthSummary.pending,
+        monthExpenses: monthSummary.expensesTotal,
+        monthNetProfit: monthSummary.collected - monthSummary.expensesTotal,
+      });
+    } else if (isPermissionError(ordersError) || isPermissionError(expensesError)) {
+      setDashboardMetrics(null);
+    } else {
+      if (ordersError) {
+        console.error('Failed to fetch dashboard metric orders', ordersError.code, ordersError.message);
       }
-    } else if (error && !isPermissionError(error)) {
-      console.error('Failed to fetch dashboard metrics', error.code, error.message);
+      if (expensesError) {
+        console.error('Failed to fetch dashboard metric expenses', expensesError.code, expensesError.message);
+      }
     }
 
     setDashboardMetricsLoading(false);
     console.info('[telemetry]', JSON.stringify({
       type: 'dashboard_metrics_fetch',
       latencyMs: Math.round(performance.now() - startedAt),
-      success: !error,
+      success: !ordersError && !expensesError,
     }));
   }, []);
 
@@ -815,12 +781,95 @@ export function useStore() {
     return null;
   }, [findOrderByClientRequestId]);
 
+  const fetchNextOrderNumber = useCallback(async () => {
+    let { data, error } = await supabase
+      .from('orders')
+      .select('order_number')
+      .eq('shop_id', SHOP_ID)
+      .order('order_number', { ascending: false })
+      .limit(1);
+
+    if (isMissingColumnError(error, 'shop_id')) {
+      ({ data, error } = await supabase
+        .from('orders')
+        .select('order_number')
+        .order('order_number', { ascending: false })
+        .limit(1));
+    }
+
+    if (isMissingColumnError(error, 'order_number')) {
+      return 1;
+    }
+
+    const currentMax = Array.isArray(data) && data.length > 0
+      ? toSafeNumber((data[0] as Record<string, unknown>).order_number)
+      : 0;
+    return Math.max(1, currentMax + 1);
+  }, []);
+
+  const insertOrderDirectly = useCallback(async (
+    orderData: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>,
+    clientRequestId: string,
+    normalizedLabel: string,
+    tableNumber: number | undefined,
+    nextInstructions: string | undefined,
+  ) => {
+    const timestamp = Date.now();
+    const businessDate = getBusinessDateString(new Date(timestamp));
+    const nextOrderNumber = await fetchNextOrderNumber();
+
+    let payload: Record<string, unknown> = {
+      shop_id: SHOP_ID,
+      table_number: tableNumber ?? null,
+      order_number: nextOrderNumber,
+      customer_name: normalizedLabel,
+      items: toOrderItemsPayload(orderData.items),
+      total: Math.round(orderData.total),
+      status: 'pending',
+      payment_method: orderData.paymentMethod,
+      payment_status: orderData.paymentStatus,
+      order_instructions: nextInstructions ?? null,
+      source: 'pos',
+      client_request_id: clientRequestId,
+      business_date: businessDate,
+      timestamp,
+    };
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { data, error } = await supabase
+        .from('orders')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (!error && data) {
+        return toOrder(data as Record<string, unknown>);
+      }
+
+      const missingColumn = extractMissingColumnName(error);
+      if (missingColumn && missingColumn in payload) {
+        const nextPayload = { ...payload };
+        delete nextPayload[missingColumn];
+        payload = nextPayload;
+        continue;
+      }
+
+      throw error ?? new Error('Direct order insert failed.');
+    }
+
+    throw new Error('Direct order insert failed.');
+  }, [fetchNextOrderNumber]);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     const businessDate = getBusinessDateString();
     const monthStartMs = monthStartTimestampInIst();
 
     const menuReq = supabase.from('menu_items').select('*').eq('shop_id', SHOP_ID).order('created_at');
+    const menuConfigReq = supabase
+      .from('menu_item_configs')
+      .select('*')
+      .eq('shop_id', SHOP_ID);
     const ordersReq = supabase
       .from('orders')
       .select('*')
@@ -833,17 +882,13 @@ export function useStore() {
       .eq('shop_id', SHOP_ID)
       .gte('timestamp', monthStartMs)
       .order('timestamp', { ascending: false });
-    const customerAppSettingsReq = supabase
-      .from('customer_app_settings')
-      .select('shop_id, customer_ai_enabled')
-      .eq('shop_id', SHOP_ID)
-      .maybeSingle();
 
-    const [menuRes, ordersRes, expensesRes, customerAppSettingsRes] = await Promise.all([
+
+    const [menuRes, menuConfigRes, ordersRes, expensesRes] = await Promise.all([
       menuReq,
+      menuConfigReq,
       ordersReq,
       expensesReq,
-      customerAppSettingsReq,
     ]);
 
     let menuData = menuRes.data;
@@ -859,17 +904,21 @@ export function useStore() {
       }
     }
 
+    const menuConfigMap = new Map<string, MenuConfigRow>();
+    if (!isMissingRelationError(menuConfigRes.error, 'menu_item_configs')) {
+      const configRows = (menuConfigRes.data ?? []) as MenuConfigRow[];
+      configRows.forEach((row) => {
+        menuConfigMap.set(row.menu_item_id, row);
+      });
+    }
+
     if (menuData) {
-      const pricingRow = menuData.find((row) => isPricingRuleMenuRow(row as Record<string, unknown>));
-      if (pricingRow) {
-        const nextRule = pricingRuleFromMenuRow(pricingRow as Record<string, unknown>);
-        setPricingRule(nextRule);
-        localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(nextRule));
-      }
       setMenuItems(
         menuData
-          .filter((row) => !isPricingRuleMenuRow(row as Record<string, unknown>))
-          .map(toMenuItem),
+          .map((row) => toMenuItem(
+            row as Record<string, unknown>,
+            menuConfigMap.get(String((row as Record<string, unknown>).id)) ?? null,
+          )),
       );
     }
 
@@ -912,20 +961,7 @@ export function useStore() {
       console.error('Failed to fetch expenses', expensesRes.error.code, expensesRes.error.message);
     }
 
-    if (isMissingRelationError(customerAppSettingsRes.error, 'customer_app_settings')) {
-      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
-    } else if (customerAppSettingsRes.error && !isPermissionError(customerAppSettingsRes.error)) {
-      console.error(
-        'Failed to fetch customer app settings',
-        customerAppSettingsRes.error.code,
-        customerAppSettingsRes.error.message,
-      );
-      setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
-    } else {
-      setCustomerAppSettings(toCustomerAppSettings(customerAppSettingsRes.data as Record<string, unknown> | null));
-    }
 
-    setCustomerAppSettingsLoading(false);
 
     setLoading(false);
     void refreshDashboardMetrics();
@@ -1046,34 +1082,8 @@ export function useStore() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'menu_items' },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const deletedId = payload.old?.id as string | undefined;
-            if (!deletedId) return;
-            const deletedName = payload.old?.name as string | undefined;
-            const deletedCategory = payload.old?.category as string | undefined;
-            if (deletedName === PRICING_RULE_MENU_NAME && deletedCategory === PRICING_RULE_MENU_CATEGORY) {
-              const resetRule = DEFAULT_PRICING_RULE;
-              setPricingRule(resetRule);
-              localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(resetRule));
-              return;
-            }
-            setMenuItems((prev) => prev.filter((item) => item.id !== deletedId));
-            return;
-          }
-
-          const row = payload.new as Record<string, unknown> | null;
-          if (!row) return;
-
-          if (isPricingRuleMenuRow(row)) {
-            const nextRule = pricingRuleFromMenuRow(row);
-            setPricingRule(nextRule);
-            localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(nextRule));
-            return;
-          }
-
-          const parsed = toMenuItem(row);
-          setMenuItems((prev) => upsertMenuItem(prev, parsed));
+        () => {
+          void fetchAll();
         },
       )
       .subscribe((status) => {
@@ -1082,28 +1092,18 @@ export function useStore() {
         }
       });
 
-    const customerSettingsChannel = supabase
-      .channel('pos-customer-app-settings')
+    const menuConfigChannel = supabase
+      .channel('pos-live-menu-configs')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'customer_app_settings' },
-        (payload) => {
-          if (payload.eventType === 'DELETE') {
-            const deletedShopId = payload.old?.shop_id as string | undefined;
-            if (!deletedShopId || deletedShopId !== SHOP_ID) return;
-            setCustomerAppSettings(DEFAULT_CUSTOMER_APP_SETTINGS);
-            return;
-          }
-
-          const row = payload.new as Record<string, unknown> | null;
-          if (!row) return;
-          if (typeof row.shop_id === 'string' && row.shop_id !== SHOP_ID) return;
-          setCustomerAppSettings(toCustomerAppSettings(row));
+        { event: '*', schema: 'public', table: 'menu_item_configs' },
+        () => {
+          void fetchAll();
         },
       )
       .subscribe((status) => {
         if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
-          recordRealtimeDisconnect('pos', 'pos-customer-app-settings', status);
+          recordRealtimeDisconnect('pos', 'pos-live-menu-configs', status);
         }
       });
 
@@ -1111,9 +1111,9 @@ export function useStore() {
       setOrdersRealtimeConnected(false);
       void supabase.removeChannel(ordersChannel);
       void supabase.removeChannel(menuChannel);
-      void supabase.removeChannel(customerSettingsChannel);
+      void supabase.removeChannel(menuConfigChannel);
     };
-  }, [refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
+  }, [fetchAll, refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -1134,31 +1134,94 @@ export function useStore() {
   }, [refreshDashboardMetrics, refreshOrders, refreshSelectedAnalytics]);
 
   const addOrder = useCallback(async (orderData: Omit<Order, 'id' | 'orderNumber' | 'timestamp'>): Promise<OrderCreateResult | null> => {
-    setOrderPending(true);
-    setOrderError(null);
+      setOrderPending(true);
+      setOrderError(null);
 
-    const startedAt = performance.now();
-    const clientRequestId = crypto.randomUUID();
-    localInsertRequestIdsRef.current.set(clientRequestId, Date.now() + 30000);
+  const startedAt = performance.now();
+  const clientRequestId = crypto.randomUUID();
+  localInsertRequestIdsRef.current.set(clientRequestId, Date.now() + 30000);
 
-    const itemsPayload = toOrderItemsPayload(orderData.items);
+  const itemsPayload = toOrderItemsPayload(orderData.items);
+  const tableNumber =
+    typeof orderData.tableNumber === 'number' && Number.isFinite(orderData.tableNumber) && orderData.tableNumber > 0
+      ? Math.floor(orderData.tableNumber)
+      : undefined;
+  const normalizedLabel =
+    orderData.displayLabel.trim() ||
+    (orderData.serviceMode === 'dine_in' && tableNumber ? `Table ${tableNumber}` : '') ||
+    orderData.customerName.trim() ||
+    'Walk-in';
+  const nextInstructions = buildOrderInstructions(
+    {
+      displayLabel: normalizedLabel,
+      serviceMode: orderData.serviceMode,
+    },
+    orderData.orderInstructions,
+  );
 
     const { data, error } = await supabase.rpc('create_order_atomic', {
-      p_customer_name: orderData.customerName,
+      p_customer_name: normalizedLabel,
+      p_table_number: tableNumber ?? null,
       p_items: itemsPayload,
       p_total: Math.round(orderData.total),
       p_payment_method: orderData.paymentMethod,
       p_payment_status: orderData.paymentStatus,
-      p_order_instructions: orderData.orderInstructions ?? null,
+      p_order_instructions: nextInstructions,
       p_source: 'pos',
       p_client_request_id: clientRequestId,
       p_shop_id: SHOP_ID,
     });
 
-    if (error) {
-      const reconciledOrder = await reconcileCreatedOrder(clientRequestId, 'pos');
-      if (reconciledOrder) {
-        setOrderPending(false);
+      if (error) {
+        if (isMissingFunctionError(error, 'create_order_atomic')) {
+          try {
+            const insertedOrder = await insertOrderDirectly(
+              orderData,
+              clientRequestId,
+              normalizedLabel,
+              tableNumber,
+              nextInstructions,
+            );
+            setOrderPending(false);
+            setOrders((prev) => upsertOrder(prev, insertedOrder));
+            setOrderError(null);
+            void refreshDashboardMetrics();
+            refreshSelectedAnalytics();
+            recordOrderCreate('pos', true, performance.now() - startedAt, {
+              orderNumber: insertedOrder.orderNumber,
+              reconciled: false,
+              fallback: 'direct_insert',
+            });
+            return {
+              orderId: insertedOrder.id,
+              orderNumber: insertedOrder.orderNumber,
+              timestamp: insertedOrder.timestamp,
+              businessDate: insertedOrder.businessDate,
+              tableNumber: insertedOrder.tableNumber,
+              source: insertedOrder.source,
+              clientRequestId,
+            };
+          } catch (directInsertError) {
+            const fallbackError = directInsertError as { code?: string; message?: string } | Error;
+            setOrderPending(false);
+            localInsertRequestIdsRef.current.delete(clientRequestId);
+            const message = fallbackError instanceof Error && fallbackError.message
+              ? fallbackError.message
+              : 'Failed to place order. Please try again.';
+            setOrderError(message);
+            recordOrderCreate('pos', false, performance.now() - startedAt, {
+              code: fallbackError instanceof Error ? undefined : fallbackError.code,
+              message,
+              reconciled: false,
+              fallback: 'direct_insert_failed',
+            });
+            return null;
+          }
+        }
+
+        const reconciledOrder = await reconcileCreatedOrder(clientRequestId, 'pos');
+        if (reconciledOrder) {
+          setOrderPending(false);
         setOrders((prev) => upsertOrder(prev, reconciledOrder));
         setOrderError(null);
         void refreshDashboardMetrics();
@@ -1173,6 +1236,7 @@ export function useStore() {
           orderNumber: reconciledOrder.orderNumber,
           timestamp: reconciledOrder.timestamp,
           businessDate: reconciledOrder.businessDate,
+          tableNumber: reconciledOrder.tableNumber,
           source: reconciledOrder.source,
           clientRequestId,
         };
@@ -1181,7 +1245,7 @@ export function useStore() {
       setOrderPending(false);
       localInsertRequestIdsRef.current.delete(clientRequestId);
       const message = isPermissionError(error)
-        ? 'Sign in as staff to create orders.'
+        ? 'Sign in as owner/waiter to create orders.'
         : error.message || 'Failed to place order. Please try again.';
       setOrderError(message);
       recordOrderCreate('pos', false, performance.now() - startedAt, {
@@ -1211,6 +1275,7 @@ export function useStore() {
           orderNumber: reconciledOrder.orderNumber,
           timestamp: reconciledOrder.timestamp,
           businessDate: reconciledOrder.businessDate,
+          tableNumber: reconciledOrder.tableNumber,
           source: reconciledOrder.source,
           clientRequestId,
         };
@@ -1243,10 +1308,11 @@ export function useStore() {
       orderNumber: inserted.orderNumber,
       timestamp: inserted.timestamp,
       businessDate: inserted.businessDate,
+      tableNumber: inserted.tableNumber,
       source: inserted.source,
       clientRequestId,
     };
-  }, [reconcileCreatedOrder, refreshDashboardMetrics, refreshSelectedAnalytics]);
+  }, [insertOrderDirectly, reconcileCreatedOrder, refreshDashboardMetrics, refreshSelectedAnalytics]);
 
   const updateOrderStatus = useCallback(async (id: string, status: 'pending' | 'completed') => {
     const { error } = await supabase.from('orders').update({ status }).eq('id', id);
@@ -1338,17 +1404,30 @@ export function useStore() {
     }
 
     const sanitizedInstructions = payload.orderInstructions?.trim() ? payload.orderInstructions.trim() : undefined;
+    const normalizedLabel = payload.displayLabel.trim() || payload.customerName.trim() || 'Walk-in';
+    const tableNumber =
+      typeof payload.tableNumber === 'number' && Number.isFinite(payload.tableNumber) && payload.tableNumber > 0
+        ? Math.floor(payload.tableNumber)
+        : null;
+    const serializedInstructions = buildOrderInstructions(
+      {
+        displayLabel: normalizedLabel,
+        serviceMode: payload.serviceMode,
+      },
+      sanitizedInstructions,
+    );
     const roundedTotal = Math.max(0, Math.round(payload.total));
     const clonedItems = payload.items.map((item) => ({ ...item }));
     const { error } = await supabase
       .from('orders')
       .update({
-        customer_name: payload.customerName.trim() || 'Guest',
+        customer_name: normalizedLabel,
         items: toOrderItemsPayload(clonedItems),
         total: roundedTotal,
         payment_method: payload.paymentMethod,
         payment_status: payload.paymentStatus,
-        order_instructions: sanitizedInstructions ?? null,
+        table_number: tableNumber,
+        order_instructions: serializedInstructions,
       })
       .eq('id', id);
 
@@ -1358,12 +1437,15 @@ export function useStore() {
           order.id === id
             ? {
               ...order,
-              customerName: payload.customerName.trim() || 'Guest',
+              customerName: normalizedLabel,
+              displayLabel: normalizedLabel,
+              serviceMode: payload.serviceMode,
+              tableNumber: tableNumber ?? undefined,
               items: clonedItems,
               total: roundedTotal,
               paymentMethod: payload.paymentMethod,
               paymentStatus: payload.paymentStatus,
-              orderInstructions: sanitizedInstructions,
+              orderInstructions: serializedInstructions,
             }
             : order
         )),
@@ -1373,12 +1455,15 @@ export function useStore() {
           order.id === id
             ? {
               ...order,
-              customerName: payload.customerName.trim() || 'Guest',
+              customerName: normalizedLabel,
+              displayLabel: normalizedLabel,
+              serviceMode: payload.serviceMode,
+              tableNumber: tableNumber ?? undefined,
               items: clonedItems,
               total: roundedTotal,
               paymentMethod: payload.paymentMethod,
               paymentStatus: payload.paymentStatus,
-              orderInstructions: sanitizedInstructions,
+              orderInstructions: serializedInstructions,
             }
             : order
         )),
@@ -1491,84 +1576,73 @@ export function useStore() {
   const addMenuItem = useCallback(async (item: Omit<MenuItem, 'id'>) => {
     await supabase.auth.refreshSession().catch(() => undefined);
 
-    const rowWithGola = {
-      name: item.name,
-      price: item.price,
-      dish_price: item.dishPrice ?? null,
-      category: item.category,
-      has_variants: item.hasVariants ?? false,
-      has_gola_variants: item.hasGolaVariants ?? false,
-      gola_variant_prices: item.hasGolaVariants ? item.golaVariantPrices ?? null : null,
-      default_gola_variant: item.hasGolaVariants ? item.defaultGolaVariant ?? 'Plain' : null,
-      variant_mode: item.variantMode ?? 'both',
-      shop_id: SHOP_ID,
-    };
-    const rowLegacy = {
-      name: item.name,
-      price: item.price,
-      dish_price: item.dishPrice ?? null,
-      category: item.category,
-      has_variants: item.hasVariants ?? false,
-    };
-
-    let { data, error } = await supabase.from('menu_items').insert(rowWithGola).select().single();
-    if (
-      isMissingColumnError(error, 'gola_variant_prices') ||
-      isMissingColumnError(error, 'has_gola_variants') ||
-      isMissingColumnError(error, 'variant_mode') ||
-      isMissingColumnError(error, 'shop_id')
-    ) {
-      ({ data, error } = await supabase.from('menu_items').insert(rowLegacy).select().single());
+    const baseRow = toLegacyMenuRow(item);
+    let { data, error } = await supabase.from('menu_items').insert(baseRow).select().single();
+    if (isMissingColumnError(error, 'shop_id')) {
+      const fallbackRow = {
+        name: item.name,
+        price: item.price,
+        dish_price: baseRow.dish_price,
+        category: item.category,
+        has_variants: item.optionGroups.length > 0,
+      };
+      ({ data, error } = await supabase.from('menu_items').insert(fallbackRow).select().single());
     }
 
-    if (error) throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
+    if (error) throw new Error(isPermissionError(error) ? 'Owner sign-in required to edit menu.' : error.message);
     if (!data) throw new Error('Menu item was not created. Please try again.');
-    setMenuItems((prev) => [...prev, toMenuItem(data)]);
+
+    const createdId = String((data as Record<string, unknown>).id);
+    const configPayload = {
+      menu_item_id: createdId,
+      shop_id: SHOP_ID,
+      ...buildMenuConfigPayload(item),
+    };
+    const { error: configError } = await supabase.from('menu_item_configs').upsert(configPayload, { onConflict: 'menu_item_id' });
+    if (configError && !isMissingRelationError(configError, 'menu_item_configs')) {
+      throw new Error(isPermissionError(configError) ? 'Owner sign-in required to edit menu.' : configError.message);
+    }
+
+    setMenuItems((prev) => [...prev, toMenuItem(data as Record<string, unknown>, configPayload)]);
   }, []);
 
   const updateMenuItem = useCallback(async (id: string, updatedItem: Omit<MenuItem, 'id'>) => {
     await supabase.auth.refreshSession().catch(() => undefined);
 
-    const rowWithGola = {
-      name: updatedItem.name,
-      price: updatedItem.price,
-      dish_price: updatedItem.dishPrice ?? null,
-      category: updatedItem.category,
-      has_variants: updatedItem.hasVariants ?? false,
-      has_gola_variants: updatedItem.hasGolaVariants ?? false,
-      gola_variant_prices: updatedItem.hasGolaVariants ? updatedItem.golaVariantPrices ?? null : null,
-      default_gola_variant: updatedItem.hasGolaVariants ? updatedItem.defaultGolaVariant ?? 'Plain' : null,
-      variant_mode: updatedItem.variantMode ?? 'both',
-      shop_id: SHOP_ID,
-    };
-    const rowLegacy = {
-      name: updatedItem.name,
-      price: updatedItem.price,
-      dish_price: updatedItem.dishPrice ?? null,
-      category: updatedItem.category,
-      has_variants: updatedItem.hasVariants ?? false,
-    };
+    const baseRow = toLegacyMenuRow(updatedItem);
 
     let { error } = await supabase
       .from('menu_items')
-      .update(rowWithGola)
+      .update(baseRow)
       .eq('id', id);
-    if (
-      isMissingColumnError(error, 'gola_variant_prices') ||
-      isMissingColumnError(error, 'has_gola_variants') ||
-      isMissingColumnError(error, 'variant_mode') ||
-      isMissingColumnError(error, 'shop_id')
-    ) {
+    if (isMissingColumnError(error, 'shop_id')) {
       ({ error } = await supabase
         .from('menu_items')
-        .update(rowLegacy)
+        .update({
+          name: updatedItem.name,
+          price: updatedItem.price,
+          dish_price: baseRow.dish_price,
+          category: updatedItem.category,
+          has_variants: updatedItem.optionGroups.length > 0,
+        })
         .eq('id', id));
     }
 
     if (error) {
       console.error('[updateMenuItem] error:', error.code, error.message);
-      throw new Error(isPermissionError(error) ? 'Staff sign-in required to edit menu.' : error.message);
+      throw new Error(isPermissionError(error) ? 'Owner sign-in required to edit menu.' : error.message);
     }
+
+    const configPayload = {
+      menu_item_id: id,
+      shop_id: SHOP_ID,
+      ...buildMenuConfigPayload(updatedItem),
+    };
+    const { error: configError } = await supabase.from('menu_item_configs').upsert(configPayload, { onConflict: 'menu_item_id' });
+    if (configError && !isMissingRelationError(configError, 'menu_item_configs')) {
+      throw new Error(isPermissionError(configError) ? 'Owner sign-in required to edit menu.' : configError.message);
+    }
+
     // Optimistically apply the change locally; realtime will confirm it.
     setMenuItems((prev) => upsertMenuItem(prev, { id, ...updatedItem }));
   }, []);
@@ -1658,45 +1732,6 @@ export function useStore() {
     setOrderError(null);
   }, []);
 
-  const updatePricingRule = useCallback(async (next: Partial<PricingRule>) => {
-    const merged: PricingRule = {
-      discountPercent: clampDiscountPercent(next.discountPercent !== undefined ? next.discountPercent : pricingRule.discountPercent),
-      bogoEnabled: next.bogoEnabled !== undefined ? next.bogoEnabled : pricingRule.bogoEnabled,
-      bogoType: next.bogoType !== undefined ? next.bogoType : pricingRule.bogoType,
-    };
-    await persistPricingRuleToSupabase(merged);
-    localStorage.setItem(PRICING_RULE_STORAGE_KEY, JSON.stringify(merged));
-    setPricingRule(merged);
-  }, [persistPricingRuleToSupabase, pricingRule]);
-
-  const updateCustomerAIEnabled = useCallback(async (enabled: boolean) => {
-    setCustomerAppSettingsSaving(true);
-    await supabase.auth.refreshSession().catch(() => undefined);
-
-    const { data, error } = await supabase
-      .from('customer_app_settings')
-      .upsert(
-        {
-          shop_id: SHOP_ID,
-          customer_ai_enabled: enabled,
-        },
-        { onConflict: 'shop_id' },
-      )
-      .select('shop_id, customer_ai_enabled')
-      .single();
-
-    setCustomerAppSettingsSaving(false);
-
-    if (isMissingRelationError(error, 'customer_app_settings')) {
-      throw new Error('Customer AI settings table is missing. Apply the latest Supabase migration first.');
-    }
-
-    if (error) {
-      throw new Error(isPermissionError(error) ? 'Staff sign-in required to manage customer AI.' : error.message);
-    }
-
-    setCustomerAppSettings(toCustomerAppSettings(data as Record<string, unknown>));
-  }, []);
   const analyticsRange = analyticsFilter.range;
 
   return {
@@ -1704,10 +1739,6 @@ export function useStore() {
     orders,
     expenses,
     loading,
-    pricingRule,
-    customerAppSettings,
-    customerAppSettingsLoading,
-    customerAppSettingsSaving,
     ordersRealtimeConnected,
     ordersPermissionError,
     incomingOrderNotification,
@@ -1727,8 +1758,6 @@ export function useStore() {
     updateOrderStatus,
     updatePayment,
     clearPayment,
-    updatePricingRule,
-    updateCustomerAIEnabled,
     addExpense,
     clearData,
     addMenuItem,
@@ -1740,6 +1769,5 @@ export function useStore() {
     refreshAll: fetchAll,
     refreshDashboardMetrics,
     refreshAnalytics,
-    refreshCustomerAppSettings,
   };
 }

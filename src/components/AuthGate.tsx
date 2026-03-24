@@ -40,8 +40,8 @@ export function AuthGate({ loading }: AuthGateProps) {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">POS Staff Login</h1>
-          <p className="text-sm text-slate-500 mt-1">Use staff credentials to access POS operations.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Cohortix POS Login</h1>
+          <p className="text-sm text-slate-500 mt-1">Sign in as <strong>owner</strong> or <strong>waiter</strong> to access POS.</p>
         </div>
 
         <form onSubmit={handleSignIn} className="space-y-4">
@@ -85,7 +85,7 @@ export function AuthGate({ loading }: AuthGateProps) {
         </form>
 
         <p className="mt-4 text-xs text-slate-500">
-          Queue access requires a Supabase staff account with <code>app_metadata.role = staff</code>.
+          Queue access requires a Supabase account with <code>role</code> set to <code>owner</code> or <code>waiter</code>.
         </p>
       </div>
     </div>

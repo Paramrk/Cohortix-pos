@@ -2,8 +2,11 @@
 @import "tailwindcss";
 
 :root {
-  /* Bottom nav bar is h-14 (56px) — keep in sync with the <nav> element */
+  --mobile-app-header-height: 56px;
+  --mobile-app-header-offset: calc(var(--mobile-app-header-height) + env(safe-area-inset-top));
   --mobile-nav-height: 56px;
+  --mobile-order-footer-height: 0px;
+  --mobile-fixed-stack-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
 }
 
 @theme {
@@ -15,14 +18,28 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
 
-  /* Extra bottom padding so scrollable content clears the fixed bottom nav */
   .mobile-bottom-offset {
     padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 1rem);
   }
 
-  /* Position floating elements (e.g. toast) just above the bottom nav */
+  .mobile-shell-offset {
+    padding-bottom: calc(var(--mobile-fixed-stack-height) + 1rem);
+  }
+
+  .mobile-order-footer-offset {
+    padding-bottom: calc(var(--mobile-fixed-stack-height) + var(--mobile-order-footer-height) + 1rem);
+  }
+
   .mobile-floating-offset {
-    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+    bottom: calc(var(--mobile-fixed-stack-height) + 0.75rem);
+  }
+
+  .mobile-floating-order-offset {
+    bottom: calc(var(--mobile-fixed-stack-height) + var(--mobile-order-footer-height) + 0.75rem);
+  }
+
+  .mobile-sheet-padding {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
   }
 }
 
@@ -36,4 +53,5 @@ body {
   font-family: 'Inter', sans-serif;
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
+  background: #f8fafc;
 }

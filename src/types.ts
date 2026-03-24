@@ -1,39 +1,93 @@
-export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain';
+export type AppRole = 'owner' | 'waiter';
+export type ServiceMode = 'dine_in' | 'takeaway' | 'delivery';
+export type PaymentMethod = 'cash' | 'upi' | 'pay_later';
+export type PaymentStatus = 'paid' | 'unpaid';
+export type OrderStatus = 'pending' | 'completed' | 'cancelled';
 
-/** Controls which Stick/Dish variants are offered for Regular items. */
-export type VariantMode = 'both' | 'stick_only' | 'dish_only';
+export interface CatalogOption {
+  id: string;
+  name: string;
+  priceDelta: number;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface CatalogOptionGroup {
+  id: string;
+  name: string;
+  type: 'size' | 'addon';
+  selection: 'single' | 'multiple';
+  required: boolean;
+  minSelect: number;
+  maxSelect: number;
+  options: CatalogOption[];
+}
 
 export interface MenuItem {
   id: string;
   name: string;
-  price: number;
-  dishPrice?: number;
   category: string;
-  hasVariants?: boolean;
-  hasGolaVariants?: boolean;
-  golaVariantPrices?: Record<GolaVariant, number>;
-  defaultGolaVariant?: GolaVariant;
-  /** Restricts which variants the POS shows for this item (Regular category only). Defaults to 'both'. */
-  variantMode?: VariantMode;
+  price: number;
+  description?: string;
+  tags: string[];
+  sortOrder: number;
+  isActive: boolean;
+  optionGroups: CatalogOptionGroup[];
 }
 
-export interface CartItem extends MenuItem {
+export interface SelectedOption {
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  priceDelta: number;
+}
+
+export interface CartItem {
+  id: string;
   cartItemId: string;
+  name: string;
+  category: string;
+  price: number;
   quantity: number;
-  variant?: 'Stick' | 'Dish' | GolaVariant;
   calculatedPrice: number;
+  lineTotal: number;
+  selectedOptions: SelectedOption[];
+}
+
+export interface OrderLine {
+  catalogItemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  category: string;
+  selectedOptions: SelectedOption[];
+}
+
+export interface OrderTicket {
+  displayLabel: string;
+  serviceMode: ServiceMode;
+  tableNumber?: number;
+  notes?: string;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
+  lines: OrderLine[];
 }
 
 export interface Order {
   id: string;
   orderNumber: number;
   customerName: string;
+  displayLabel: string;
+  serviceMode: ServiceMode;
+  tableNumber?: number;
   orderInstructions?: string;
   items: CartItem[];
   total: number;
-  status: 'pending' | 'completed' | 'cancelled';
-  paymentMethod: 'cash' | 'upi' | 'pay_later';
-  paymentStatus: 'paid' | 'unpaid';
+  status: OrderStatus;
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
   timestamp: number;
   businessDate?: string;
   source?: 'pos' | 'customer';
@@ -48,15 +102,13 @@ export interface Expense {
   timestamp: number;
 }
 
-export interface PricingRule {
-  discountPercent: number;
-  bogoEnabled: boolean;
-  bogoType: 'b1g1' | 'b2g1';
-}
 
-export interface CustomerAppSettings {
-  shopId: string;
-  customerAIEnabled: boolean;
+
+export interface RestaurantProfile {
+  name: string;
+  currencyCode: string;
+  currencySymbol: string;
+  defaultServiceMode: ServiceMode;
 }
 
 export interface OrderCreateResult {
@@ -64,6 +116,7 @@ export interface OrderCreateResult {
   orderNumber: number;
   timestamp: number;
   businessDate?: string;
+  tableNumber?: number;
   source?: 'pos' | 'customer';
   clientRequestId?: string;
 }
@@ -95,9 +148,12 @@ export interface AnalyticsFilter {
 
 export interface UpdateOrderDetailsInput {
   customerName: string;
+  displayLabel: string;
+  serviceMode: ServiceMode;
+  tableNumber?: number | null;
   orderInstructions?: string;
   items: CartItem[];
   total: number;
-  paymentMethod: 'cash' | 'upi' | 'pay_later';
-  paymentStatus: 'paid' | 'unpaid';
+  paymentMethod: PaymentMethod;
+  paymentStatus: PaymentStatus;
 }

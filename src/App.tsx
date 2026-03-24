@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download } from 'lucide-react';
+import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download, ShieldAlert } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
 import { NewOrder } from './components/NewOrder';
@@ -7,11 +7,12 @@ import { OrderQueue } from './components/OrderQueue';
 import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
-import { AIChatBot } from './components/AIChatBot';
 import { supabase } from './lib/supabase';
-import type { Order } from './types';
+import { getSessionRole } from './lib/restaurant';
+import type { AppRole, Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { showLocalNotification } from './lib/pushNotifications';
+import { useLanguage } from './lib/i18n';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
@@ -72,6 +73,7 @@ export default function App() {
   });
   const alertAudioContextRef = useRef<AudioContext | null>(null);
   const lastPlayedOrderIdRef = useRef<string | null>(null);
+  const { t, language, setLanguage } = useLanguage();
 
   const handlePushTabSwitch = useCallback((tab: 'queue') => {
     setActiveTab(tab);
@@ -90,16 +92,21 @@ export default function App() {
   const {
     orders, expenses, menuItems, loading,
     addOrder, updateOrderDetails, cancelOrder, updateOrderStatus, updatePayment, clearPayment, addExpense, clearData,
-    addMenuItem, updateMenuItem, renameMenuCategory, deleteMenuItem, updatePricingRule,
-    customerAppSettings, customerAppSettingsLoading, customerAppSettingsSaving, updateCustomerAIEnabled,
+    addMenuItem, updateMenuItem, renameMenuCategory, deleteMenuItem,
     incomingOrderNotification, clearIncomingOrderNotification,
-    ordersRealtimeConnected, pricingRule,
+    ordersRealtimeConnected,
     orderPending, orderError, clearOrderError,
     ordersPermissionError,
     dashboardMetrics, dashboardMetricsLoading,
     analyticsFilter, analyticsRange, analyticsOrders, analyticsExpenses, analyticsLoading, analyticsError, refreshAnalytics,
     refreshAll,
   } = useStore();
+
+  const appRole: AppRole | null = useMemo(() => getSessionRole(session), [session]);
+
+  const handleSignOut = useCallback(async () => {
+    await supabase.auth.signOut();
+  }, []);
 
   const pendingCount = useMemo(
     () => orders.filter((order) => order.status === 'pending').length,
@@ -172,7 +179,7 @@ export default function App() {
         void showLocalNotification('New Order Received', {
           body: [
             `#${order.orderNumber} — ${order.customerName}`,
-            `${itemCount} item${itemCount !== 1 ? 's' : ''}`,
+            `${itemCount} ${t('notification.items')}`,
             `Rs ${order.total}`,
           ].filter(Boolean).join(' | '),
           tag: `order-${order.id}`,
@@ -283,7 +290,7 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-500 text-sm font-medium">Checking staff session...</p>
+          <p className="text-slate-500 text-sm font-medium">{t('app.checkingSession')}</p>
         </div>
       </div>
     );
@@ -295,41 +302,61 @@ export default function App() {
     );
   }
 
-  if (loading) {
+  if (!appRole) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-500 text-sm font-medium">Loading Cohortix POS...</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center">
+          <ShieldAlert className="w-12 h-12 text-rose-500 mx-auto mb-3" />
+          <h2 className="text-xl font-bold text-slate-900 mb-2">{t('app.accessDeniedTitle')}</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            {t('app.accessDeniedMsg')}
+          </p>
+          <button
+            type="button"
+            onClick={() => { void handleSignOut(); }}
+            className="h-10 px-4 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 inline-flex items-center gap-2 text-sm font-semibold"
+          >
+            <LogOut className="w-4 h-4" />
+            {t('nav.signOut')}
+          </button>
         </div>
       </div>
     );
   }
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
+  const isOwner = appRole === 'owner';
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-slate-500 text-sm font-medium">{t('app.loading')}</p>
+        </div>
+      </div>
+    );
+  }
 
   const serviceAlerts = [
     !ordersRealtimeConnected
       ? {
         id: 'realtime',
         tone: 'amber' as const,
-        message: 'Live updates delayed; queue is using fallback refresh.',
+        message: t('app.alert.realtime'),
       }
       : null,
     ordersPermissionError
       ? {
         id: 'permission',
         tone: 'rose' as const,
-        message: 'Staff session required for live order actions.',
+        message: t('app.alert.permission'),
       }
       : null,
     orderError
       ? {
         id: 'order',
         tone: 'rose' as const,
-        message: 'Order not confirmed yet; retry only after this warning clears.',
+        message: t('app.alert.orderError'),
       }
       : null,
   ].filter(Boolean) as Array<{ id: string; tone: 'amber' | 'rose'; message: string }>;
@@ -353,11 +380,21 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <nav className="flex space-x-2">
-                <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+                <NavButton tab="new-order" icon={Store} label={t('nav.newOrder')} activeTab={activeTab} onSelect={setActiveTab} />
+                <NavButton tab="queue" icon={ClipboardList} label={t('nav.queue')} badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
+                {isOwner && <NavButton tab="dashboard" icon={BarChart3} label={t('nav.dashboard')} activeTab={activeTab} onSelect={setActiveTab} />}
+                {isOwner && <NavButton tab="menu" icon={Settings} label={t('nav.menu')} activeTab={activeTab} onSelect={setActiveTab} />}
               </nav>
+              
+              <button
+                type="button"
+                onClick={() => setLanguage(language === 'en' ? 'gu' : 'en')}
+                className="h-10 px-3 ml-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-semibold"
+                aria-label="Toggle language"
+              >
+                {language === 'en' ? 'ગ' : 'En'}
+              </button>
+
               {canInstallApp && (
                 <button
                   type="button"
@@ -365,7 +402,7 @@ export default function App() {
                   className="h-10 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-2 text-sm font-semibold"
                 >
                   <Download className="w-4 h-4" />
-                  Install App
+                  {t('nav.installApp')}
                 </button>
               )}
               <button
@@ -374,7 +411,7 @@ export default function App() {
                 className="h-10 px-3 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-semibold"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                {t('nav.signOut')}
               </button>
             </div>
           </div>
@@ -385,7 +422,7 @@ export default function App() {
       <header className="bg-white border-b border-slate-200 md:hidden sticky top-0 z-10 shadow-sm"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
-        <div className="flex items-center gap-2 px-3 h-14">
+        <div className="flex items-center gap-2 px-3" style={{ minHeight: 'var(--mobile-app-header-height)' }}>
           <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
             <img
               src={COHORTIX_LOGO_SRC}
@@ -401,9 +438,18 @@ export default function App() {
               className="h-8 px-2.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
             >
               <Download className="w-3.5 h-3.5" />
-              Install
+              {t('nav.installApp')}
             </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => setLanguage(language === 'en' ? 'gu' : 'en')}
+            className="h-8 w-8 ml-1 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center shrink-0 font-bold"
+            aria-label="Toggle language"
+          >
+            {language === 'en' ? 'ગ' : 'En'}
+          </button>
           <button
             type="button"
             onClick={() => { void handleSignOut(); }}
@@ -434,7 +480,8 @@ export default function App() {
       )}
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 overflow-visible flex flex-col">
+      <main className={`flex-1 max-w-7xl w-full mx-auto overflow-visible flex flex-col ${activeTab === 'new-order' ? 'px-0 py-0 sm:p-6 lg:p-8' : 'px-2.5 py-3 sm:p-6 lg:p-8'
+        }`}>
         {activeTab === 'new-order' && (
           <NewOrder
             menuItems={menuItems}
@@ -442,7 +489,7 @@ export default function App() {
             editingOrder={editingOrder}
             onUpdateOrder={updateOrderDetails}
             onExitEditMode={() => setEditingOrder(null)}
-            pricingRule={pricingRule}
+
             orderPending={orderPending}
             orderError={orderError}
             onClearOrderError={clearOrderError}
@@ -470,13 +517,10 @@ export default function App() {
             }}
           />
         )}
-        {activeTab === 'dashboard' && (
+        {activeTab === 'dashboard' && isOwner && (
           <Dashboard
             onAddExpense={addExpense}
             onClearData={clearData}
-            customerAIEnabled={customerAppSettings.customerAIEnabled}
-            customerAISettingsLoading={customerAppSettingsLoading}
-            customerAISettingsSaving={customerAppSettingsSaving}
             metrics={dashboardMetrics}
             metricsLoading={dashboardMetricsLoading}
             analyticsFilter={analyticsFilter}
@@ -488,10 +532,9 @@ export default function App() {
             onChangeAnalyticsFilter={(nextFilter) => {
               void refreshAnalytics(nextFilter);
             }}
-            onToggleCustomerAI={updateCustomerAIEnabled}
           />
         )}
-        {activeTab === 'menu' && (
+        {activeTab === 'menu' && isOwner && (
           <MenuManager
             menuItems={menuItems}
             orders={orders}
@@ -505,8 +548,6 @@ export default function App() {
               await renameMenuCategory(currentName, nextName);
             }}
             onDelete={deleteMenuItem}
-            pricingRule={pricingRule}
-            onUpdatePricingRule={updatePricingRule}
           />
         )}
       </main>
@@ -518,7 +559,7 @@ export default function App() {
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />
-          <span className="text-xs font-medium text-slate-500">Powered by Cohortix</span>
+          <span className="text-xs font-medium text-slate-500">{t('nav.poweredBy')}</span>
         </div>
       </footer>
 
@@ -526,10 +567,10 @@ export default function App() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-start z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <NavButton tab="new-order" icon={Store} label="Order" activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="queue" icon={ClipboardList} label="Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="dashboard" icon={BarChart3} label="Stats" activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+        <NavButton tab="new-order" icon={Store} label={t('nav.newOrder')} activeTab={activeTab} onSelect={setActiveTab} />
+        <NavButton tab="queue" icon={ClipboardList} label={t('nav.queue')} badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
+        {isOwner && <NavButton tab="dashboard" icon={BarChart3} label={t('nav.dashboard')} activeTab={activeTab} onSelect={setActiveTab} />}
+        {isOwner && <NavButton tab="menu" icon={Settings} label={t('nav.menu')} activeTab={activeTab} onSelect={setActiveTab} />}
       </nav>
 
       {incomingOrderNotification && orderAlertsEnabled && (
@@ -539,24 +580,24 @@ export default function App() {
             setActiveTab('queue');
             clearIncomingOrderNotification();
           }}
-          className="fixed right-3 md:right-6 mobile-floating-offset md:bottom-6 z-30 w-[calc(100%-1.5rem)] md:w-auto max-w-sm bg-indigo-600 text-white rounded-xl shadow-xl p-4 text-left hover:bg-indigo-700 transition-colors"
+          className={`fixed left-3 right-3 md:left-auto md:right-6 ${activeTab === 'new-order' ? 'mobile-floating-order-offset' : 'mobile-floating-offset'} md:bottom-6 z-40 md:w-auto max-w-sm bg-indigo-600 text-white rounded-xl shadow-xl p-4 text-left hover:bg-indigo-700 transition-colors`}
         >
           <div className="flex items-start gap-3">
             <BellRing className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
-              <p className="font-bold">New Order Received</p>
+              <p className="font-bold">{t('notification.newOrder')}</p>
               <p className="text-sm text-indigo-100">
                 #{incomingOrderNotification.orderNumber} | {incomingOrderNotification.customerName}
               </p>
               <p className="text-xs text-indigo-100 mt-1">
-                {incomingOrderNotification.items.reduce((sum, item) => sum + item.quantity, 0)} items | Rs {incomingOrderNotification.total}
+                {incomingOrderNotification.items.reduce((sum, item) => sum + item.quantity, 0)} {t('notification.items')} | Rs {incomingOrderNotification.total}
               </p>
             </div>
           </div>
         </button>
       )}
 
-      <AIChatBot />
+
     </div>
   );
 }
