@@ -2,11 +2,7 @@ import React, { useState } from 'react';
 import { LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-interface AuthGateProps {
-  loading: boolean;
-}
-
-export function AuthGate({ loading }: AuthGateProps) {
+export function AuthGate() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +72,7 @@ export function AuthGate({ loading }: AuthGateProps) {
 
           <button
             type="submit"
-            disabled={loading || signingIn}
+            disabled={signingIn}
             className="w-full h-11 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <LogIn className="w-4 h-4" />
