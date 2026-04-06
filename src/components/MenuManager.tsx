@@ -161,7 +161,7 @@ export function MenuManager({
   }, [pricingRule]);
 
   const allCategories = Array.from(
-    new Set([...DEFAULT_CATEGORIES, ...customCategories, ...menuItems.map((i) => i.category)])
+    new Set([...DEFAULT_CATEGORIES, ...customCategories])
   );
 
   const hasGolaPrices = GOLA_VARIANTS.some((v) => form.golaVariantPrices[v] > 0);

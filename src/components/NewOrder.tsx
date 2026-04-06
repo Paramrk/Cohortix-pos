@@ -115,6 +115,255 @@ function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
   );
 }
 
+interface CartContentProps {
+  showHeader?: boolean;
+  cart: CartItem[];
+  totalItems: number;
+  customerName: string;
+  orderInstructions: string;
+  paymentMethod: 'cash' | 'upi' | 'pay_later';
+  pricingRule: PricingRule;
+  activeOfferLabel: string;
+  subtotal: number;
+  offerSavings: number;
+  freeUnits: number;
+  percentDiscountAmount: number;
+  total: number;
+  isEditing: boolean;
+  editError: string | null;
+  orderError: string | null;
+  orderPending: boolean;
+  updatePending: boolean;
+  editingOrderNumber?: number;
+  discountUnitPrice: (price: number) => number;
+  updateQuantity: (cartItemId: string, delta: number) => void;
+  removeFromCart: (cartItemId: string) => void;
+  onCustomerNameChange: (value: string) => void;
+  onOrderInstructionsChange: (value: string) => void;
+  onPaymentMethodChange: (method: 'cash' | 'upi' | 'pay_later') => void;
+  onCheckout: () => void;
+}
+
+function CartContent({
+  showHeader = true,
+  cart,
+  totalItems,
+  customerName,
+  orderInstructions,
+  paymentMethod,
+  pricingRule,
+  activeOfferLabel,
+  subtotal,
+  offerSavings,
+  freeUnits,
+  percentDiscountAmount,
+  total,
+  isEditing,
+  editError,
+  orderError,
+  orderPending,
+  updatePending,
+  editingOrderNumber,
+  discountUnitPrice,
+  updateQuantity,
+  removeFromCart,
+  onCustomerNameChange,
+  onOrderInstructionsChange,
+  onPaymentMethodChange,
+  onCheckout,
+}: CartContentProps) {
+  return (
+    <>
+      {showHeader && (
+        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+            <ShoppingCart className="w-5 h-5 text-indigo-600" />
+            Current Order
+          </h2>
+          <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
+            {totalItems} items
+          </span>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {cart.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
+            <ShoppingCart className="w-12 h-12 opacity-20" />
+            <p>Cart is empty</p>
+          </div>
+        ) : (
+          cart.map((item) => (
+            <div key={item.cartItemId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <div className="flex-1">
+                <div className="font-medium text-slate-800 flex items-center gap-2 flex-wrap">
+                  {item.name}
+                  {item.variant && (
+                    <span className="text-[10px] uppercase tracking-wider font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
+                      {item.variant}
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-slate-500 mt-0.5">
+                  ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+                  <button
+                    type="button"
+                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, -1); }}
+                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
+                  <button
+                    type="button"
+                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, 1); }}
+                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onPointerDown={(e) => { e.preventDefault(); removeFromCart(item.cartItemId); }}
+                  className="h-10 w-10 flex items-center justify-center text-red-500 active:bg-red-50 rounded-lg touch-manipulation"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className={`p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 ${showHeader ? '' : 'sticky bottom-0 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]'}`}>
+        {(pricingRule.bogoEnabled || pricingRule.discountPercent > 0) && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {pricingRule.bogoEnabled && (
+              <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+                {activeOfferLabel} Active
+              </span>
+            )}
+            {pricingRule.discountPercent > 0 && (
+              <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+                {pricingRule.discountPercent}% OFF Active
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="mb-3">
+          <input
+            type="text"
+            placeholder="Customer Name (Optional)"
+            value={customerName}
+            onChange={(e) => onCustomerNameChange(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+          />
+        </div>
+        <div className="mb-3">
+          <textarea
+            placeholder="Custom Instructions (Optional) - e.g. less syrup, no dry fruit"
+            value={orderInstructions}
+            onChange={(e) => onOrderInstructionsChange(e.target.value)}
+            rows={2}
+            maxLength={220}
+            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white resize-none"
+          />
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => onPaymentMethodChange('cash')}
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'cash'
+              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            💵 Cash
+          </button>
+          <button
+            type="button"
+            onClick={() => onPaymentMethodChange('upi')}
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'upi'
+              ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            📱 UPI
+          </button>
+          <button
+            type="button"
+            onClick={() => onPaymentMethodChange('pay_later')}
+            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'pay_later'
+              ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
+              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
+              }`}
+          >
+            🕒 Later
+          </button>
+        </div>
+
+        {paymentMethod === 'upi' && (
+          <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl mb-4 shadow-sm">
+            <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
+          </div>
+        )}
+
+        <div className="mb-4 px-1 space-y-1.5">
+          <div className="flex justify-between text-sm text-slate-500">
+            <span>Subtotal</span>
+            <span>₹{subtotal}</span>
+          </div>
+          {pricingRule.bogoEnabled && (
+            <div className="flex justify-between text-sm text-emerald-700 font-semibold">
+              <span>{activeOfferLabel} Savings</span>
+              <span>-₹{offerSavings}</span>
+            </div>
+          )}
+          {pricingRule.bogoEnabled && freeUnits > 0 && (
+            <div className="flex justify-between text-xs text-emerald-700/80 font-semibold">
+              <span>Free Items</span>
+              <span>{freeUnits}</span>
+            </div>
+          )}
+          {pricingRule.discountPercent > 0 && (
+            <div className="flex justify-between text-sm text-indigo-700 font-semibold">
+              <span>{pricingRule.discountPercent}% Discount</span>
+              <span>-₹{percentDiscountAmount}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-end pt-1">
+            <span className="text-slate-600 font-semibold">Total Amount</span>
+            <span className="text-3xl font-bold text-slate-800">₹{total}</span>
+          </div>
+        </div>
+
+        {(isEditing ? editError : orderError) && (
+          <p className="mb-3 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+            {isEditing ? editError : orderError}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={onCheckout}
+          disabled={cart.length === 0 || orderPending || updatePending}
+          className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
+        >
+          {isEditing
+            ? (updatePending ? 'Updating Order...' : `Update Order #${editingOrderNumber ?? ''}`)
+            : (orderPending ? 'Placing Order...' : 'Place Order')}
+        </button>
+      </div>
+    </>
+  );
+}
+
 function toEditableCartItems(items: Order['items']): CartItem[] {
   return items.map((item, index) => {
     const rawItem = item as unknown as Record<string, unknown>;
@@ -408,211 +657,34 @@ export function NewOrder({
       ? cartItemNames.join(', ')
       : `${cartItemNames.slice(0, 2).join(', ')} +${cartItemNames.length - 2} more`;
 
-  const CartContent = ({ showHeader = true }: { showHeader?: boolean } = {}) => (
-    <>
-      {showHeader && (
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-indigo-600" />
-            Current Order
-          </h2>
-          <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
-            {totalItems} items
-          </span>
-        </div>
-      )}
+  const cartContentCommonProps: Omit<CartContentProps, 'showHeader'> = {
+    cart,
+    totalItems,
+    customerName,
+    orderInstructions,
+    paymentMethod,
+    pricingRule,
+    activeOfferLabel,
+    subtotal,
+    offerSavings,
+    freeUnits,
+    percentDiscountAmount,
+    total,
+    isEditing,
+    editError,
+    orderError,
+    orderPending,
+    updatePending,
+    editingOrderNumber: editingOrder?.orderNumber,
+    discountUnitPrice,
+    updateQuantity,
+    removeFromCart,
+    onCustomerNameChange: (value) => { onClearOrderError(); setCustomerName(value); },
+    onOrderInstructionsChange: (value) => { onClearOrderError(); setOrderInstructions(value); },
+    onPaymentMethodChange: (method) => { onClearOrderError(); setPaymentMethod(method); },
+    onCheckout: () => { void handleCheckout(); },
+  };
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
-            <ShoppingCart className="w-12 h-12 opacity-20" />
-            <p>Cart is empty</p>
-          </div>
-        ) : (
-          cart.map((item) => (
-            <div key={item.cartItemId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <div className="flex-1">
-                <div className="font-medium text-slate-800 flex items-center gap-2 flex-wrap">
-                  {item.name}
-                  {item.variant && (
-                    <span className="text-[10px] uppercase tracking-wider font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
-                      {item.variant}
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-slate-500 mt-0.5">
-                  ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
-                  <button
-                    type="button"
-                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, -1); }}
-                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, 1); }}
-                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onPointerDown={(e) => { e.preventDefault(); removeFromCart(item.cartItemId); }}
-                  className="h-10 w-10 flex items-center justify-center text-red-500 active:bg-red-50 rounded-lg touch-manipulation"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className={`p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 ${showHeader ? '' : 'sticky bottom-0 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]'}`}>
-        {(pricingRule.bogoEnabled || pricingRule.discountPercent > 0) && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {pricingRule.bogoEnabled && (
-              <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-                {activeOfferLabel} Active
-              </span>
-            )}
-            {pricingRule.discountPercent > 0 && (
-              <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
-                {pricingRule.discountPercent}% OFF Active
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="mb-3">
-          <input
-            type="text"
-            placeholder="Customer Name (Optional)"
-            value={customerName}
-            onChange={(e) => {
-              onClearOrderError();
-              setCustomerName(e.target.value);
-            }}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
-          />
-        </div>
-        <div className="mb-3">
-          <textarea
-            placeholder="Custom Instructions (Optional) - e.g. less syrup, no dry fruit"
-            value={orderInstructions}
-            onChange={(e) => {
-              onClearOrderError();
-              setOrderInstructions(e.target.value);
-            }}
-            rows={2}
-            maxLength={220}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white resize-none"
-          />
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <button
-            type="button"
-            onClick={() => {
-              onClearOrderError();
-              setPaymentMethod('cash');
-            }}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'cash'
-              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
-          >
-            💵 Cash
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onClearOrderError();
-              setPaymentMethod('upi');
-            }}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'upi'
-              ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
-          >
-            📱 UPI
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onClearOrderError();
-              setPaymentMethod('pay_later');
-            }}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'pay_later'
-              ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
-          >
-            🕒 Later
-          </button>
-        </div>
-
-        {paymentMethod === 'upi' && (
-          <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl mb-4 shadow-sm">
-            <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
-          </div>
-        )}
-
-        <div className="mb-4 px-1 space-y-1.5">
-          <div className="flex justify-between text-sm text-slate-500">
-            <span>Subtotal</span>
-            <span>₹{subtotal}</span>
-          </div>
-          {pricingRule.bogoEnabled && (
-            <div className="flex justify-between text-sm text-emerald-700 font-semibold">
-              <span>{activeOfferLabel} Savings</span>
-              <span>-₹{offerSavings}</span>
-            </div>
-          )}
-          {pricingRule.bogoEnabled && freeUnits > 0 && (
-            <div className="flex justify-between text-xs text-emerald-700/80 font-semibold">
-              <span>Free Items</span>
-              <span>{freeUnits}</span>
-            </div>
-          )}
-          {pricingRule.discountPercent > 0 && (
-            <div className="flex justify-between text-sm text-indigo-700 font-semibold">
-              <span>{pricingRule.discountPercent}% Discount</span>
-              <span>-₹{percentDiscountAmount}</span>
-            </div>
-          )}
-          <div className="flex justify-between items-end pt-1">
-            <span className="text-slate-600 font-semibold">Total Amount</span>
-            <span className="text-3xl font-bold text-slate-800">₹{total}</span>
-          </div>
-        </div>
-
-        {(isEditing ? editError : orderError) && (
-          <p className="mb-3 text-sm font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
-            {isEditing ? editError : orderError}
-          </p>
-        )}
-
-        <button
-          type="button"
-          onClick={() => { void handleCheckout(); }}
-          disabled={cart.length === 0 || orderPending || updatePending}
-          className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
-        >
-          {isEditing
-            ? (updatePending ? 'Updating Order...' : `Update Order #${editingOrder?.orderNumber ?? ''}`)
-            : (orderPending ? 'Placing Order...' : 'Place Order')}
-        </button>
-      </div>
-    </>
-  );
 
   return (
     <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
@@ -847,7 +919,7 @@ export function NewOrder({
 
       {/* Cart Section (Desktop) */}
       <div className="hidden md:flex w-96 bg-white rounded-2xl shadow-sm border border-slate-200 flex-col h-[calc(100vh-8rem)] sticky top-4">
-        <CartContent />
+        <CartContent {...cartContentCommonProps} />
       </div>
 
       {/* Mobile Bottom Cart Bar */}
@@ -895,7 +967,7 @@ export function NewOrder({
               </button>
             </div>
             <div className="flex-1 min-h-0 flex flex-col">
-              <CartContent showHeader={false} />
+              <CartContent {...cartContentCommonProps} showHeader={false} />
             </div>
           </div>
         </div>

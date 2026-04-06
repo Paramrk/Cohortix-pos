@@ -83,10 +83,6 @@ export function AuthGate({ loading }: AuthGateProps) {
             {signingIn ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
-
-        <p className="mt-4 text-xs text-slate-500">
-          Queue access requires a Supabase staff account with <code>app_metadata.role = staff</code>.
-        </p>
       </div>
     </div>
   );

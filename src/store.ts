@@ -296,7 +296,7 @@ function pricingRuleDishCode(rule: PricingRule) {
 
 function toMenuItem(row: Record<string, unknown>): MenuItem {
   const rawVariantMode = row.variant_mode;
-  const hasVariants = Boolean(row.has_variants) || false;
+  const rawHasVariants = Boolean(row.has_variants) || false;
   const hasGolaVariants = Boolean(row.has_gola_variants) || false;
   const hasDishPrice = row.dish_price != null && toSafeNumber(row.dish_price) > 0;
   const normalizedCategory = String(row.category ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -311,9 +311,14 @@ function toMenuItem(row: Record<string, unknown>): MenuItem {
       ? rawVariantMode
       : categoryForcesDishOnly
         ? 'dish_only'
-        : (hasVariants && !hasGolaVariants && !hasDishPrice)
+        : (rawHasVariants && !hasGolaVariants && !hasDishPrice)
           ? 'stick_only'
           : 'both';
+
+  // If DB has an explicit variant_mode value, treat item as variant regardless of has_variants column.
+  // This covers items saved with variant_mode='both' but has_variants=false due to old code paths.
+  const variantModeIsExplicit = rawVariantMode === 'both' || rawVariantMode === 'stick_only' || rawVariantMode === 'dish_only';
+  const hasVariants = rawHasVariants || variantModeIsExplicit;
 
   return {
     id: String(row.id),
