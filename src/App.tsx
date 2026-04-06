@@ -7,7 +7,6 @@ import { OrderQueue } from './components/OrderQueue';
 import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
-import { AIChatBot } from './components/AIChatBot';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -555,8 +554,6 @@ export default function App() {
           </div>
         </button>
       )}
-
-      <AIChatBot />
     </div>
   );
 }

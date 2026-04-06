@@ -293,19 +293,36 @@ function SimpleMarkdown({ text }: { text: string }) {
 
 export function AIInsights(props: AIInsightsProps) {
   const [config, setConfig] = useState<AIConfig>(() => getAIConfig());
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem('cohortix_ai_insights_messages');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [autoLoading, setAutoLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const configured = isAIConfigured(config);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+    try {
+      localStorage.setItem('cohortix_ai_insights_messages', JSON.stringify(messages));
+    } catch {
+      // Ignore
+    }
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  }, [messages, loading, isOpen]);
 
   function handleSaveConfig(c: AIConfig) {
     saveAIConfig(c);
@@ -395,13 +412,22 @@ export function AIInsights(props: AIInsightsProps) {
             {configured ? providerLabel : 'Setup'}
           </button>
           {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setIsOpen((o) => !o)}
-              className="inline-flex items-center gap-1.5 bg-white/20 text-white font-semibold text-xs px-3 py-2 rounded-xl hover:bg-white/30 transition-colors"
-            >
-              {isOpen ? 'Hide' : 'Show'} chat
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setMessages([])}
+                className="inline-flex items-center gap-1.5 bg-white/20 text-white font-semibold text-xs px-3 py-2 rounded-xl hover:bg-white/30 transition-colors"
+              >
+                Clear Chat
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen((o) => !o)}
+                className="inline-flex items-center gap-1.5 bg-white/20 text-white font-semibold text-xs px-3 py-2 rounded-xl hover:bg-white/30 transition-colors"
+              >
+                {isOpen ? 'Hide' : 'Show'} chat
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -418,8 +444,7 @@ export function AIInsights(props: AIInsightsProps) {
       {/* Chat panel */}
       {!showSettings && isOpen && (
         <div className="mt-2 bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-          {/* Messages */}
-          <div className="max-h-[420px] overflow-y-auto p-4 space-y-3">
+          <div ref={scrollContainerRef} className="max-h-[420px] overflow-y-auto p-4 space-y-3">
             {!configured && messages.length === 0 && (
               <div className="text-center py-6 text-slate-400 text-sm">
                 Click <strong>Setup</strong> above to add your API key.
@@ -479,7 +504,6 @@ export function AIInsights(props: AIInsightsProps) {
                 </div>
               </div>
             )}
-            <div ref={bottomRef} />
           </div>
 
           {/* Input */}
