@@ -253,29 +253,26 @@ export default function App() {
       if (!mounted) return;
       setSession(data.session ?? null);
       setAuthLoading(false);
-      if (data.session) {
-        void refreshAll();
-      }
     });
 
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) {
-        void refreshAll();
-      }
     });
 
     return () => {
       mounted = false;
-      subscription.subscription.unsubscribe();
+      if (subscription?.subscription) {
+        subscription.subscription.unsubscribe();
+      }
     };
-  }, [refreshAll]);
+  }, []);
 
   useEffect(() => {
     if (session) {
       void refreshAll();
+      void refreshAnalytics('day');
     }
-  }, [refreshAll, session]);
+  }, [refreshAll, refreshAnalytics, session]);
 
   if (authLoading) {
     return (

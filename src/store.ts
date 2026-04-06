@@ -936,13 +936,8 @@ export function useStore() {
     void refreshDashboardMetrics();
   }, [refreshDashboardMetrics]);
 
-  useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
-
-  useEffect(() => {
-    void refreshAnalytics('day');
-  }, [refreshAnalytics]);
+  // Removed duplicate fetchAll and refreshAnalytics useEffects on mount.
+  // These are now handled intelligently by App.tsx.
 
   const refreshOrders = useCallback(async () => {
     const businessDate = getBusinessDateString();
