@@ -31,23 +31,25 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: NavButtonProps) {
+  const isActive = activeTab === tab;
   return (
     <button
       onClick={() => onSelect(tab)}
-      className={`flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 flex-1 py-3 md:py-4 px-2 md:px-6 transition-all relative ${activeTab === tab
-        ? 'text-indigo-600 bg-indigo-50/50 md:bg-transparent md:border-b-2 border-indigo-600'
-        : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-        }`}
+      className={`flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all relative scale-98 active:scale-95 duration-150 ${
+        isActive
+          ? 'bg-secondary-container text-on-secondary-container rounded-full px-4 py-1.5 my-1.5 md:my-0 md:rounded-none md:bg-transparent md:border-b-2 md:border-secondary md:text-secondary md:px-6 md:py-4 md:flex-1'
+          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 py-3 md:py-4 px-2 md:px-6 md:flex-1'
+      }`}
     >
       <div className="relative">
-        <Icon className={`w-6 h-6 md:w-5 md:h-5 ${activeTab === tab ? 'stroke-[2.5px]' : ''}`} />
+        <Icon className={`w-6 h-6 md:w-5 md:h-5 ${isActive ? 'stroke-[2.5px]' : ''}`} />
         {badge > 0 && (
-          <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+          <span className="absolute -top-2 -right-2 bg-error text-on-error text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
             {badge > 99 ? '99+' : badge}
           </span>
         )}
       </div>
-      <span className={`text-[10px] md:text-sm font-medium ${activeTab === tab ? 'font-bold' : ''}`}>
+      <span className={`text-[10px] md:text-sm font-medium ${isActive ? 'font-bold font-headline' : ''}`}>
         {label}
       </span>
     </button>
@@ -278,7 +280,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-500 text-sm font-medium">Checking staff session...</p>
         </div>
       </div>
@@ -295,7 +297,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-500 text-sm font-medium">Loading Cohortix POS...</p>
         </div>
       </div>
@@ -358,7 +360,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => { void handleInstallApp(); }}
-                  className="h-10 px-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-2 text-sm font-semibold"
+                  className="h-10 px-3 rounded-lg border border-secondary-container bg-secondary-container/20 text-on-secondary-container hover:bg-secondary-container/40 flex items-center gap-2 text-sm font-semibold"
                 >
                   <Download className="w-4 h-4" />
                   Install App
@@ -394,7 +396,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => { void handleInstallApp(); }}
-              className="h-8 px-2.5 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
+              className="h-8 px-2.5 rounded-lg border border-secondary-container bg-secondary-container/20 text-on-secondary-container flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
             >
               <Download className="w-3.5 h-3.5" />
               Install
@@ -535,16 +537,16 @@ export default function App() {
             setActiveTab('queue');
             clearIncomingOrderNotification();
           }}
-          className="fixed right-3 md:right-6 mobile-floating-offset md:bottom-6 z-30 w-[calc(100%-1.5rem)] md:w-auto max-w-sm bg-indigo-600 text-white rounded-xl shadow-xl p-4 text-left hover:bg-indigo-700 transition-colors"
+          className="fixed right-3 md:right-6 mobile-floating-offset md:bottom-6 z-30 w-[calc(100%-1.5rem)] md:w-auto max-w-sm bg-secondary text-white rounded-xl shadow-xl p-4 text-left hover:opacity-90 transition-opacity"
         >
           <div className="flex items-start gap-3">
             <BellRing className="w-5 h-5 mt-0.5 shrink-0" />
             <div>
               <p className="font-bold">New Order Received</p>
-              <p className="text-sm text-indigo-100">
+              <p className="text-sm text-secondary-container">
                 #{incomingOrderNotification.orderNumber} | {incomingOrderNotification.customerName}
               </p>
-              <p className="text-xs text-indigo-100 mt-1">
+              <p className="text-xs text-secondary-container mt-1">
                 {incomingOrderNotification.items.reduce((sum, item) => sum + item.quantity, 0)} items | Rs {incomingOrderNotification.total}
               </p>
             </div>

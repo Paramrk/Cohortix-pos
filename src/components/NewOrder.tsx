@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search } from 'lucide-react';
 import {
   CartItem,
   GolaVariant,
@@ -31,14 +31,22 @@ interface PosDraftOrderV1 {
   paymentMethod: 'cash' | 'upi' | 'pay_later';
 }
 
-const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
+const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain', 'Stick'];
 const POS_DRAFT_STORAGE_KEY = 'pos_draft_order_v1';
+
+function generateId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Ice Cream Only': 'bg-pink-100 text-pink-700',
   'Dry Fruit Only': 'bg-amber-100 text-amber-700',
   'Ice Cream + Dry Fruit': 'bg-purple-100 text-purple-700',
   'Plain': 'bg-slate-100 text-slate-600',
+  'Stick': 'bg-teal-100 text-teal-700',
 };
 
 function offerGroupSize(offerType: PricingRule['bogoType']) {
@@ -87,6 +95,14 @@ function calculateOfferTotals(cart: CartItem[], pricingRule: PricingRule) {
   };
 }
 
+const getCategoryEmoji = (cat: string) => {
+  const norm = (cat || '').toLowerCase();
+  if (norm.includes('premium')) return '🍨';
+  if (norm.includes('special')) return '🍧';
+  if (norm.includes('pyali') || norm.includes('pyaali')) return '🍧';
+  return '🍢';
+};
+
 interface QtyControlProps {
   quantity: number;
   onAdd: () => void;
@@ -95,21 +111,21 @@ interface QtyControlProps {
 
 function QuantityControl({ quantity, onAdd, onRemove }: QtyControlProps) {
   return (
-    <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+    <div className="flex items-center gap-2 bg-surface-container rounded-full px-1 py-1 border border-outline-variant">
       <button
         type="button"
-        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(); }}
-        className="h-11 w-11 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        className="w-7 h-7 rounded-full text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest active:scale-90 transition-transform touch-manipulation"
       >
-        <Minus className="w-4 h-4" />
+        <Minus className="w-3.5 h-3.5" />
       </button>
-      <span className="w-9 text-center text-base font-bold text-slate-800">{quantity}</span>
+      <span className="w-6 text-center text-xs font-bold text-primary font-mono">{quantity}</span>
       <button
         type="button"
-        onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); onAdd(); }}
-        className="h-11 w-11 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
+        onClick={(e) => { e.stopPropagation(); onAdd(); }}
+        className="w-7 h-7 rounded-full text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest active:scale-90 transition-transform touch-manipulation"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-3.5 h-3.5" />
       </button>
     </div>
   );
@@ -175,80 +191,83 @@ function CartContent({
   return (
     <>
       {showHeader && (
-        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
-            <ShoppingCart className="w-5 h-5 text-indigo-600" />
+        <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low rounded-t-2xl shrink-0">
+          <h2 className="text-base font-bold text-primary flex items-center gap-2 font-headline">
+            <ShoppingCart className="w-5 h-5 text-secondary" />
             Current Order
           </h2>
-          <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2 py-1 rounded-full">
+          <span className="bg-secondary text-on-secondary text-xs font-bold px-2 py-0.5 rounded-full font-mono">
             {totalItems} items
           </span>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-0 border border-outline-variant rounded-xl bg-surface-container-lowest m-4">
         {cart.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
-            <ShoppingCart className="w-12 h-12 opacity-20" />
-            <p>Cart is empty</p>
+            <ShoppingCart className="w-12 h-12 opacity-20 text-secondary" />
+            <p className="font-medium text-sm">Cart is empty</p>
           </div>
         ) : (
           cart.map((item) => (
-            <div key={item.cartItemId} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-              <div className="flex-1">
-                <div className="font-medium text-slate-800 flex items-center gap-2 flex-wrap">
-                  {item.name}
-                  {item.variant && (
-                    <span className="text-[10px] uppercase tracking-wider font-bold bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded">
-                      {item.variant}
-                    </span>
-                  )}
+            <div key={item.cartItemId} className="flex items-center justify-between p-3 border-b border-outline-variant last:border-0 bg-surface-container-lowest">
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded bg-surface-container-high flex items-center justify-center shrink-0">
+                  <span className="text-xl">{getCategoryEmoji(item.category)}</span>
                 </div>
-                <div className="text-sm text-slate-500 mt-0.5">
-                  ₹{discountUnitPrice(item.calculatedPrice)} × {item.quantity}
+                <div className="flex flex-col min-w-0">
+                  <span className="font-body-md text-sm font-semibold text-on-surface truncate pr-1">
+                    {item.name}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                    {item.variant ?? 'Standard'}
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <div className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm">
+              <div className="flex flex-col items-end ml-2 shrink-0">
+                <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.calculatedPrice) * item.quantity}</span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center border border-outline-variant rounded-lg h-[30px] bg-white">
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.cartItemId, -1)}
+                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-slate-100 rounded-l-lg transition-colors"
+                    >
+                      <Minus className="w-3 h-3" />
+                    </button>
+                    <span className="w-[24px] text-center font-mono text-xs font-bold text-on-surface">{item.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => updateQuantity(item.cartItemId, 1)}
+                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-slate-100 rounded-r-lg transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, -1); }}
-                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-l-lg active:bg-slate-100 touch-manipulation"
+                    onClick={() => removeFromCart(item.cartItemId)}
+                    className="h-[30px] w-[30px] flex items-center justify-center text-rose-500 active:bg-rose-50 rounded-lg"
                   >
-                    <Minus className="w-4 h-4" />
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{item.quantity}</span>
-                  <button
-                    type="button"
-                    onPointerDown={(e) => { e.preventDefault(); updateQuantity(item.cartItemId, 1); }}
-                    className="h-10 w-10 flex items-center justify-center text-slate-600 rounded-r-lg active:bg-slate-100 touch-manipulation"
-                  >
-                    <Plus className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onPointerDown={(e) => { e.preventDefault(); removeFromCart(item.cartItemId); }}
-                  className="h-10 w-10 flex items-center justify-center text-red-500 active:bg-red-50 rounded-lg touch-manipulation"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
             </div>
           ))
         )}
       </div>
 
-      <div className={`p-4 border-t border-slate-100 bg-slate-50 rounded-b-2xl shrink-0 ${showHeader ? '' : 'sticky bottom-0 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]'}`}>
+      <div className={`p-4 border-t border-outline-variant bg-surface-container-lowest shrink-0 ${showHeader ? '' : 'sticky bottom-0 shadow-[0_-6px_20px_rgba(15,23,42,0.08)]'}`}>
         {(pricingRule.bogoEnabled || pricingRule.discountPercent > 0) && (
           <div className="mb-3 flex flex-wrap gap-2">
             {pricingRule.bogoEnabled && (
-              <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full">
                 {activeOfferLabel} Active
               </span>
             )}
             {pricingRule.discountPercent > 0 && (
-              <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-surface-variant text-on-surface px-2 py-0.5 rounded-full border border-outline-variant">
                 {pricingRule.discountPercent}% OFF Active
               </span>
             )}
@@ -261,7 +280,7 @@ function CartContent({
             placeholder="Customer Name (Optional)"
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+            className="w-full h-11 px-3 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white"
           />
         </div>
         <div className="mb-3">
@@ -271,7 +290,7 @@ function CartContent({
             onChange={(e) => onOrderInstructionsChange(e.target.value)}
             rows={2}
             maxLength={220}
-            className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white resize-none"
+            className="w-full px-3 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white resize-none"
           />
         </div>
 
@@ -279,37 +298,58 @@ function CartContent({
           <button
             type="button"
             onClick={() => onPaymentMethodChange('cash')}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'cash'
-              ? 'bg-emerald-100 text-emerald-800 border-2 border-emerald-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
+            className={`flex-1 flex flex-col items-center justify-center p-2 rounded-xl border-2 h-[80px] relative transition-transform active:scale-95 ${
+              paymentMethod === 'cash'
+                ? 'border-secondary bg-surface-container-lowest text-secondary font-bold shadow-sm'
+                : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
+            }`}
           >
-            💵 Cash
+            <span className="text-xl mb-1">💵</span>
+            <span className="font-label-md text-xs">Cash</span>
+            {paymentMethod === 'cash' && (
+              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
+                <span className="text-[10px] font-bold">✓</span>
+              </div>
+            )}
           </button>
           <button
             type="button"
             onClick={() => onPaymentMethodChange('upi')}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'upi'
-              ? 'bg-blue-100 text-blue-800 border-2 border-blue-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
+            className={`flex-1 flex flex-col items-center justify-center p-2 rounded-xl border-2 h-[80px] relative transition-transform active:scale-95 ${
+              paymentMethod === 'upi'
+                ? 'border-secondary bg-surface-container-lowest text-secondary font-bold shadow-sm'
+                : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
+            }`}
           >
-            📱 UPI
+            <span className="text-xl mb-1">📱</span>
+            <span className="font-label-md text-xs">UPI</span>
+            {paymentMethod === 'upi' && (
+              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
+                <span className="text-[10px] font-bold">✓</span>
+              </div>
+            )}
           </button>
           <button
             type="button"
             onClick={() => onPaymentMethodChange('pay_later')}
-            className={`flex-1 min-h-11 py-2.5 rounded-xl text-sm font-bold transition-colors touch-manipulation ${paymentMethod === 'pay_later'
-              ? 'bg-orange-100 text-orange-800 border-2 border-orange-500'
-              : 'bg-white text-slate-600 border-2 border-slate-200 hover:bg-slate-50'
-              }`}
+            className={`flex-1 flex flex-col items-center justify-center p-2 rounded-xl border-2 h-[80px] relative transition-transform active:scale-95 ${
+              paymentMethod === 'pay_later'
+                ? 'border-secondary bg-surface-container-lowest text-secondary font-bold shadow-sm'
+                : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
+            }`}
           >
-            🕒 Later
+            <span className="text-xl mb-1">🕒</span>
+            <span className="font-label-md text-xs">Later</span>
+            {paymentMethod === 'pay_later' && (
+              <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
+                <span className="text-[10px] font-bold">✓</span>
+              </div>
+            )}
           </button>
         </div>
 
         {paymentMethod === 'upi' && (
-          <div className="flex flex-col items-center justify-center p-4 bg-white border border-slate-200 rounded-xl mb-4 shadow-sm">
+          <div className="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant rounded-xl mb-4 shadow-sm">
             <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
           </div>
         )}
@@ -317,29 +357,29 @@ function CartContent({
         <div className="mb-4 px-1 space-y-1.5">
           <div className="flex justify-between text-sm text-slate-500">
             <span>Subtotal</span>
-            <span>₹{subtotal}</span>
+            <span className="font-mono">₹{subtotal}</span>
           </div>
           {pricingRule.bogoEnabled && (
             <div className="flex justify-between text-sm text-emerald-700 font-semibold">
               <span>{activeOfferLabel} Savings</span>
-              <span>-₹{offerSavings}</span>
+              <span className="font-mono">-₹{offerSavings}</span>
             </div>
           )}
           {pricingRule.bogoEnabled && freeUnits > 0 && (
             <div className="flex justify-between text-xs text-emerald-700/80 font-semibold">
               <span>Free Items</span>
-              <span>{freeUnits}</span>
+              <span className="font-mono">{freeUnits}</span>
             </div>
           )}
           {pricingRule.discountPercent > 0 && (
-            <div className="flex justify-between text-sm text-indigo-700 font-semibold">
+            <div className="flex justify-between text-sm text-secondary font-semibold">
               <span>{pricingRule.discountPercent}% Discount</span>
-              <span>-₹{percentDiscountAmount}</span>
+              <span className="font-mono">-₹{percentDiscountAmount}</span>
             </div>
           )}
           <div className="flex justify-between items-end pt-1">
             <span className="text-slate-600 font-semibold">Total Amount</span>
-            <span className="text-3xl font-bold text-slate-800">₹{total}</span>
+            <span className="text-3xl font-bold text-slate-800 font-headline">₹{total}</span>
           </div>
         </div>
 
@@ -353,7 +393,7 @@ function CartContent({
           type="button"
           onClick={onCheckout}
           disabled={cart.length === 0 || orderPending || updatePending}
-          className="w-full min-h-12 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-3.5 rounded-xl font-bold text-lg transition-all shadow-sm active:scale-[0.98] touch-manipulation"
+          className="w-full h-[52px] bg-secondary hover:opacity-90 disabled:bg-slate-300 disabled:cursor-not-allowed text-on-secondary py-3 rounded-xl font-bold text-base uppercase tracking-wider transition-all shadow-sm active:scale-[0.98] btn-checkout flex items-center justify-center gap-2"
         >
           {isEditing
             ? (updatePending ? 'Updating Order...' : `Update Order #${editingOrderNumber ?? ''}`)
@@ -383,7 +423,7 @@ function toEditableCartItems(items: Order['items']): CartItem[] {
       cartItemId:
         typeof rawItem.cartItemId === 'string'
           ? rawItem.cartItemId
-          : `${itemId}-${index}-${crypto.randomUUID()}`,
+          : `${itemId}-${index}-${generateId()}`,
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
       variant: variant as CartItem['variant'],
       calculatedPrice: Number.isFinite(calculatedPrice) ? calculatedPrice : 0,
@@ -410,6 +450,8 @@ export function NewOrder({
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [updatePending, setUpdatePending] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     try {
@@ -530,7 +572,7 @@ export function NewOrder({
       }
       return [
         ...prev,
-        { ...item, cartItemId: crypto.randomUUID(), quantity: 1, variant: safeVariant as any, calculatedPrice },
+        { ...item, cartItemId: generateId(), quantity: 1, variant: safeVariant as any, calculatedPrice },
       ];
     });
   }, [onClearOrderError]);
@@ -646,10 +688,19 @@ export function NewOrder({
   const categoryItemsMap = useMemo(() => {
     const map = new Map<string, MenuItem[]>();
     for (const category of categories) {
-      map.set(category, menuItems.filter((item) => item.category === category));
+      let items = menuItems.filter((item) => item.category === category);
+      if (searchQuery.trim() !== '') {
+        const query = searchQuery.toLowerCase().trim();
+        items = items.filter(
+          (item) =>
+            item.name.toLowerCase().includes(query) ||
+            item.category.toLowerCase().includes(query)
+        );
+      }
+      map.set(category, items);
     }
     return map;
-  }, [categories, menuItems]);
+  }, [categories, menuItems, searchQuery]);
 
   const cartItemNames = Array.from(new Set(cart.map((i) => i.name)));
   const summaryText =
@@ -686,260 +737,475 @@ export function NewOrder({
   };
 
 
+  const visibleCategories = selectedCategory === 'All' ? categories : [selectedCategory];
+
+  const totalVisibleItemsCount = useMemo(() => {
+    let count = 0;
+    for (const category of visibleCategories) {
+      count += (categoryItemsMap.get(category) ?? []).length;
+    }
+    return count;
+  }, [visibleCategories, categoryItemsMap]);
+
   return (
     <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
       {/* Menu Section */}
       <div className={`flex-1 ${cart.length > 0 && !showMobileCart ? 'pb-36' : 'pb-4'} md:pb-0`}>
         {isEditing && editingOrder && (
-          <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-indigo-800">Editing Order #{editingOrder.orderNumber}</p>
+          <div className="mb-4 rounded-xl border border-secondary bg-secondary-container/10 px-3 py-2.5 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-secondary">Editing Order #{editingOrder.orderNumber}</p>
             <button
               type="button"
               onClick={handleExitEditMode}
-              className="text-xs font-bold uppercase tracking-wide text-indigo-700 hover:text-indigo-900"
+              className="text-xs font-bold uppercase tracking-wider text-secondary hover:underline"
             >
               Exit Edit
             </button>
           </div>
         )}
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu</h2>
-          {pricingRule.bogoEnabled && (
-            <span className="text-[11px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">
-              {activeOfferLabel}
-            </span>
-          )}
-          {pricingRule.discountPercent > 0 && (
-            <span className="text-[11px] font-bold uppercase tracking-wide bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full">
-              {pricingRule.discountPercent}% Off
-            </span>
-          )}
+        
+        {/* Search & Category Filter Section */}
+        <div className="sticky top-[56px] md:top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-outline-variant/50 w-full py-3 px-4 mb-5 -mx-4 sm:-mx-6 flex flex-col gap-3">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search items by name or category..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-11 pl-11 pr-10 border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white shadow-sm"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3.5 top-3 h-5 w-5 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <div className="flex gap-2 items-center overflow-x-auto no-scrollbar w-full">
+            <button
+              onClick={() => setSelectedCategory('All')}
+              className={`px-4 py-2 rounded-full font-label-md text-xs font-bold whitespace-nowrap active:scale-95 transition-all duration-150 border ${
+                selectedCategory === 'All'
+                  ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+                  : 'bg-surface-container text-on-surface hover:bg-surface-container-highest border-outline-variant'
+              }`}
+            >
+              All Items
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full font-label-md text-xs font-bold whitespace-nowrap active:scale-95 transition-all duration-150 border ${
+                  selectedCategory === cat
+                    ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+                    : 'bg-surface-container text-on-surface hover:bg-surface-container-highest border-outline-variant'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="space-y-8">
-          {categories.map((category) => (
-            <div key={category}>
-              <h3 className="text-lg font-bold text-slate-400 mb-4 uppercase tracking-wider">
-                {category}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {(categoryItemsMap.get(category) ?? []).map((item) => {
-                  const isExpanded = expandedItemId === item.id;
 
-                  // ---- Gola variants (4 options) ----
-                  if (item.hasGolaVariants) {
-                    const totalQty = GOLA_VARIANTS.reduce((s, v) => s + getCartQuantity(item.id, v), 0);
-                    return (
-                      <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all col-span-1 sm:col-span-2 lg:col-span-3 ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
-                        <div
-                          className="p-4 flex justify-between items-center cursor-pointer"
-                          onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
-                        >
-                          <div>
-                            <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-xs font-medium mt-0.5 leading-tight break-words pr-2">
-                              {GOLA_VARIANTS.map(v => `${v}: ₹${discountUnitPrice(item.golaVariantPrices?.[v] ?? item.price)}`).join(' · ')}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {totalQty > 0 && (
-                              <div className="bg-indigo-600 text-white w-7 h-7 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-                                {totalQty}
+        {totalVisibleItemsCount === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400 space-y-3 bg-surface-container-lowest border border-outline-variant rounded-2xl">
+            <Search className="w-10 h-10 opacity-30 text-secondary" />
+            <p className="font-semibold text-sm">No items found matching "{searchQuery}"</p>
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {visibleCategories.map((category) => {
+              const items = categoryItemsMap.get(category) ?? [];
+              if (items.length === 0) return null;
+              return (
+                <div key={category}>
+                  <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider font-headline">
+                    {category}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {items.map((item) => {
+                      const isExpanded = expandedItemId === item.id;
+                      const hasPhoto = Boolean((item as any).imageUrl || (item as any).image);
+
+                      // ---- Gola variants (4 options) ----
+                      if (item.hasGolaVariants) {
+                        const isStickRestricted = isStickRestrictedCategory(item.category);
+                        const itemGolaVariants = isStickRestricted
+                          ? GOLA_VARIANTS.filter(v => v !== 'Stick')
+                          : GOLA_VARIANTS;
+                        const totalQty = itemGolaVariants.reduce((s, v) => s + getCartQuantity(item.id, v), 0);
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bg-surface-container-lowest border rounded-xl overflow-hidden flex flex-col relative scale-98 active:scale-[0.99] transition-all duration-150 ${isExpanded ? 'border-secondary shadow-md' : 'border-outline-variant'}`}
+                          >
+                            {hasPhoto && (
+                              <div className="aspect-video w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-1 border-b border-outline-variant/30">
+                                <img src={(item as any).imageUrl || (item as any).image} alt={item.name} className="w-full h-full object-cover" />
                               </div>
                             )}
-                            <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-indigo-600' : ''}`}>
-                              <ChevronDown className="w-5 h-5" />
+                            <div
+                              className="p-3 flex justify-between items-center cursor-pointer"
+                              onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                {!hasPhoto && (
+                                  <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                                    <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                  <div className="text-slate-500 text-[10px] font-medium mt-0.5 leading-tight break-words pr-2 truncate">
+                                    {itemGolaVariants.map(v => `${v}: ₹${discountUnitPrice(item.golaVariantPrices?.[v] ?? item.price)}`).join(' · ')}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {totalQty > 0 && (
+                                  <div className="bg-secondary text-on-secondary w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs font-mono shadow-sm">
+                                    {totalQty}
+                                  </div>
+                                )}
+                                <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
+                                  <ChevronDown className="w-4 h-4" />
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
 
-                        {isExpanded && (
-                          <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-3 rounded-b-xl">
-                            {GOLA_VARIANTS.map((v) => {
-                              const qty = getCartQuantity(item.id, v);
-                              const price = item.golaVariantPrices?.[v] ?? item.price;
-                              return (
-                                <div key={v} className="flex justify-between items-center">
+                            {isExpanded && (
+                              <div className="bg-slate-50/80 p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
+                                {itemGolaVariants.map((v) => {
+                                  const qty = getCartQuantity(item.id, v);
+                                  const price = item.golaVariantPrices?.[v] ?? item.price;
+                                  return (
+                                    <div key={v} className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
+                                      <div className="min-w-0 flex-1">
+                                        <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${GOLA_VARIANT_COLORS[v]}`}>{v}</span>
+                                        <span className="block text-[11px] font-bold text-slate-500 mt-0.5">₹{discountUnitPrice(price)}</span>
+                                      </div>
+                                      <QuantityControl
+                                        quantity={qty}
+                                        onAdd={() => handleAdd(item, v)}
+                                        onRemove={() => handleRemove(item, v)}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // ---- Stick / Dish variants ----
+                      if (item.hasVariants) {
+                        const categoryRestrictsStick = isStickRestrictedCategory(item.category);
+                        const mode = item.variantMode ?? 'both';
+                        const showStick = !categoryRestrictsStick && mode !== 'dish_only';
+                        const showDish = mode !== 'stick_only';
+
+                        const stickQty = getCartQuantity(item.id, 'Stick');
+                        const dishQty = getCartQuantity(item.id, 'Dish');
+                        const totalQty = (showStick ? stickQty : 0) + (showDish ? dishQty : 0);
+                        const dishOnlyPrice = item.dishPrice ?? item.price;
+
+                        if (showStick && !showDish) {
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => {
+                                if (stickQty === 0) {
+                                  handleAdd(item, 'Stick');
+                                }
+                              }}
+                              className={`bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col relative scale-98 active:scale-95 transition-all duration-150 ${stickQty === 0 ? 'cursor-pointer' : ''}`}
+                            >
+                              {hasPhoto && (
+                                <div className="aspect-square w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-1 border-b border-outline-variant/30">
+                                  <img src={(item as any).imageUrl || (item as any).image} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              {hasPhoto ? (
+                                <div className="p-3 flex-1 flex flex-col justify-between gap-2">
+                                  <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                                  <div className="flex justify-between items-end gap-1.5 mt-auto">
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase">Stick</span>
+                                      <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
+                                    </div>
+                                    <QuantityControl
+                                      quantity={stickQty}
+                                      onAdd={() => handleAdd(item, 'Stick')}
+                                      onRemove={() => handleRemove(item, 'Stick')}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="p-3 w-full flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                                      <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Stick</span>
+                                        <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0">
+                                    <QuantityControl
+                                      quantity={stickQty}
+                                      onAdd={() => handleAdd(item, 'Stick')}
+                                      onRemove={() => handleRemove(item, 'Stick')}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        if (!showStick && showDish) {
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => {
+                                if (dishQty === 0) {
+                                  handleAdd(item, 'Dish');
+                                }
+                              }}
+                              className={`bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col relative scale-98 active:scale-95 transition-all duration-150 ${dishQty === 0 ? 'cursor-pointer' : ''}`}
+                            >
+                              {hasPhoto && (
+                                <div className="aspect-square w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-1 border-b border-outline-variant/30">
+                                  <img src={(item as any).imageUrl || (item as any).image} alt={item.name} className="w-full h-full object-cover" />
+                                </div>
+                              )}
+                              {hasPhoto ? (
+                                <div className="p-3 flex-1 flex flex-col justify-between gap-2">
+                                  <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                                  <div className="flex justify-between items-end gap-1.5 mt-auto">
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] text-slate-400 font-bold uppercase">Dish</span>
+                                      <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(dishOnlyPrice)}</span>
+                                    </div>
+                                    <QuantityControl
+                                      quantity={dishQty}
+                                      onAdd={() => handleAdd(item, 'Dish')}
+                                      onRemove={() => handleRemove(item, 'Dish')}
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="p-3 w-full flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                                      <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Dish</span>
+                                        <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(dishOnlyPrice)}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="shrink-0">
+                                    <QuantityControl
+                                      quantity={dishQty}
+                                      onAdd={() => handleAdd(item, 'Dish')}
+                                      onRemove={() => handleRemove(item, 'Dish')}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        // Both variants available — expandable card
+                        return (
+                          <div
+                            key={item.id}
+                            className={`bg-surface-container-lowest border rounded-xl overflow-hidden flex flex-col relative scale-98 active:scale-[0.99] transition-all duration-150 ${isExpanded ? 'border-secondary shadow-md' : 'border-outline-variant'}`}
+                          >
+                            {hasPhoto && (
+                              <div className="aspect-video w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-1 border-b border-outline-variant/30">
+                                <img src={(item as any).imageUrl || (item as any).image} alt={item.name} className="w-full h-full object-cover" />
+                              </div>
+                            )}
+                            <div
+                              className="p-3 flex justify-between items-center cursor-pointer"
+                              onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                {!hasPhoto && (
+                                  <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                                    <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                  </div>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                  <div className="text-slate-500 text-[10px] font-medium mt-0.5">
+                                    Stick: ₹{discountUnitPrice(item.price)} · Dish: ₹{discountUnitPrice(dishOnlyPrice)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {totalQty > 0 && !isExpanded && (
+                                  <div className="bg-secondary text-on-secondary w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs font-mono shadow-sm">
+                                    {totalQty}
+                                  </div>
+                                )}
+                                <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
+                                  <ChevronDown className="w-4 h-4" />
+                                </div>
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="bg-slate-50/80 p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
+                                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
                                   <div>
-                                    <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded mb-0.5 ${GOLA_VARIANT_COLORS[v]}`}>{v}</span>
-                                    <span className="block text-xs font-medium text-slate-500">₹{discountUnitPrice(price)}</span>
+                                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Stick</span>
+                                    <span className="text-xs font-bold text-slate-700">₹{discountUnitPrice(item.price)}</span>
                                   </div>
                                   <QuantityControl
-                                    quantity={qty}
-                                    onAdd={() => handleAdd(item, v)}
-                                    onRemove={() => handleRemove(item, v)}
+                                    quantity={stickQty}
+                                    onAdd={() => handleAdd(item, 'Stick')}
+                                    onRemove={() => handleRemove(item, 'Stick')}
                                   />
                                 </div>
-                              );
-                            })}
+                                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
+                                  <div>
+                                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Dish</span>
+                                    <span className="text-xs font-bold text-slate-700">₹{discountUnitPrice(dishOnlyPrice)}</span>
+                                  </div>
+                                  <QuantityControl
+                                    quantity={dishQty}
+                                    onAdd={() => handleAdd(item, 'Dish')}
+                                    onRemove={() => handleRemove(item, 'Dish')}
+                                  />
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  }
+                        );
+                      }
 
-                  // ---- Stick / Dish variants ----
-                  if (item.hasVariants) {
-                    // Derive which variants are available for this item
-                    const categoryRestrictsStick = isStickRestrictedCategory(item.category);
-                    const mode = item.variantMode ?? 'both';
-                    const showStick = !categoryRestrictsStick && mode !== 'dish_only';
-                    const showDish = mode !== 'stick_only';
-
-                    const stickQty = getCartQuantity(item.id, 'Stick');
-                    const dishQty = getCartQuantity(item.id, 'Dish');
-                    const totalQty = (showStick ? stickQty : 0) + (showDish ? dishQty : 0);
-                    const dishOnlyPrice = item.dishPrice ?? item.price;
-
-                    // If only one variant is available, render as a simple ADD card (no expand needed)
-                    if (showStick && !showDish) {
+                      // ---- Simple item ----
+                      const qty = getCartQuantity(item.id);
                       return (
-                        <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
-                          <div>
-                            <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-sm font-medium mt-0.5">
-                              Stick · ₹{discountUnitPrice(item.price)}
-                            </div>
-                          </div>
-                          <QuantityControl
-                            quantity={stickQty}
-                            onAdd={() => handleAdd(item, 'Stick')}
-                            onRemove={() => handleRemove(item, 'Stick')}
-                          />
-                        </div>
-                      );
-                    }
-
-                    if (!showStick && showDish) {
-                      return (
-                        <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
-                          <div>
-                            <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-sm font-medium mt-0.5">
-                              Dish · ₹{discountUnitPrice(dishOnlyPrice)}
-                            </div>
-                          </div>
-                          <QuantityControl
-                            quantity={dishQty}
-                            onAdd={() => handleAdd(item, 'Dish')}
-                            onRemove={() => handleRemove(item, 'Dish')}
-                          />
-                        </div>
-                      );
-                    }
-
-                    // Both variants available — expandable card
-                    return (
-                      <div key={item.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-indigo-300 ring-1 ring-indigo-300' : 'border-slate-200 hover:border-indigo-200'}`}>
                         <div
-                          className="p-4 flex justify-between items-center cursor-pointer"
-                          onClick={() => setExpandedItemId(isExpanded ? null : item.id)}
+                          key={item.id}
+                          onClick={() => {
+                            if (qty === 0) {
+                              handleAdd(item);
+                            }
+                          }}
+                          className={`bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col relative scale-98 active:scale-95 transition-all duration-150 ${qty === 0 ? 'cursor-pointer' : ''}`}
                         >
-                          <div>
-                            <div className="font-bold text-slate-800">{item.name}</div>
-                            <div className="text-slate-500 text-sm font-medium mt-0.5">
-                              ₹{discountUnitPrice(item.price)} · ₹{item.dishPrice ? discountUnitPrice(item.dishPrice) : '—'}
+                          {hasPhoto && (
+                            <div className="aspect-square w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-1 border-b border-outline-variant/30">
+                              <img src={(item as any).imageUrl || (item as any).image} alt={item.name} className="w-full h-full object-cover" />
                             </div>
-                          </div>
-                          {totalQty > 0 && !isExpanded ? (
-                            <div className="bg-indigo-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm shadow-sm">
-                              {totalQty}
+                          )}
+                          {hasPhoto ? (
+                            <div className="p-3 flex-1 flex flex-col justify-between gap-2">
+                              <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                              <div className="flex justify-between items-end gap-1.5 mt-auto">
+                                <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
+                                {qty === 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleAdd(item); }}
+                                    className="w-7 h-7 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors border border-outline-variant shadow-sm focus:outline-none"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                ) : (
+                                  <QuantityControl
+                                    quantity={qty}
+                                    onAdd={() => handleAdd(item)}
+                                    onRemove={() => handleRemove(item)}
+                                  />
+                                )}
+                              </div>
                             </div>
                           ) : (
-                            <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-indigo-600' : ''}`}>
-                              <ChevronDown className="w-5 h-5" />
+                            <div className="p-3 w-full flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                                  <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                  <span className="font-headline text-sm font-bold text-primary block mt-0.5">₹{discountUnitPrice(item.price)}</span>
+                                </div>
+                              </div>
+                              <div className="shrink-0">
+                                {qty === 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleAdd(item); }}
+                                    className="w-8 h-8 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors border border-outline-variant shadow-sm focus:outline-none"
+                                    aria-label="Add item"
+                                  >
+                                    <Plus className="w-4 h-4" />
+                                  </button>
+                                ) : (
+                                  <QuantityControl
+                                    quantity={qty}
+                                    onAdd={() => handleAdd(item)}
+                                    onRemove={() => handleRemove(item)}
+                                  />
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>
-
-                        {isExpanded && (
-                          <div className="bg-slate-50/80 p-4 border-t border-slate-100 space-y-4 rounded-b-xl">
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="block text-sm font-bold text-slate-700">Stick</span>
-                                <span className="text-xs font-medium text-slate-500">₹{discountUnitPrice(item.price)}</span>
-                              </div>
-                              <QuantityControl
-                                quantity={stickQty}
-                                onAdd={() => handleAdd(item, 'Stick')}
-                                onRemove={() => handleRemove(item, 'Stick')}
-                              />
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <div>
-                                <span className="block text-sm font-bold text-slate-700">Dish</span>
-                                <span className="text-xs font-medium text-slate-500">
-                                  ₹{discountUnitPrice(dishOnlyPrice)}
-                                </span>
-                              </div>
-                              <QuantityControl
-                                quantity={dishQty}
-                                onAdd={() => handleAdd(item, 'Dish')}
-                                onRemove={() => handleRemove(item, 'Dish')}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-
-                  // ---- Simple item ----
-                  const qty = getCartQuantity(item.id);
-                  return (
-                    <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center hover:border-indigo-200 transition-colors">
-                      <div>
-                        <div className="font-bold text-slate-800">{item.name}</div>
-                        <div className="text-slate-500 text-sm font-medium mt-0.5">₹{discountUnitPrice(item.price)}</div>
-                      </div>
-                      <div>
-                        {qty === 0 ? (
-                          <button
-                            type="button"
-                            onPointerDown={(e) => { e.preventDefault(); handleAdd(item); }}
-                            className="px-5 min-h-11 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg hover:bg-indigo-100 active:scale-95 transition-transform touch-manipulation"
-                          >
-                            ADD
-                          </button>
-                        ) : (
-                          <QuantityControl
-                            quantity={qty}
-                            onAdd={() => handleAdd(item)}
-                            onRemove={() => handleRemove(item)}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
+
       {/* Cart Section (Desktop) */}
-      <div className="hidden md:flex w-96 bg-white rounded-2xl shadow-sm border border-slate-200 flex-col h-[calc(100vh-8rem)] sticky top-4">
+      <div className="hidden md:flex w-96 bg-white rounded-2xl shadow-sm border border-outline-variant flex-col h-[calc(100vh-8rem)] sticky top-4">
         <CartContent {...cartContentCommonProps} />
       </div>
 
       {/* Mobile Bottom Cart Bar */}
       {cart.length > 0 && !showMobileCart && (
         <div className="md:hidden fixed left-0 right-0 p-4 mobile-floating-offset z-40">
-          <div
-            className="bg-indigo-600 rounded-2xl shadow-xl p-4 flex justify-between items-center cursor-pointer active:scale-[0.98] transition-transform"
+          <button
+            className="w-full bg-secondary text-on-secondary shadow-[0_8px_16px_rgba(0,108,73,0.25),inset_0_2px_4px_rgba(255,255,255,0.2)] rounded-full h-14 flex items-center justify-between px-6 active:scale-98 transition-transform duration-150 pointer-events-auto"
             onClick={() => setShowMobileCart(true)}
           >
-            <div className="text-white">
-              <div className="font-bold text-lg">{totalItems} item{totalItems > 1 ? 's' : ''}</div>
-              <div className="text-indigo-100 text-sm font-medium truncate max-w-[55vw] sm:max-w-[280px]">{summaryText}</div>
-            </div>
-            <div className="flex flex-col items-end">
-              <div className="text-white font-bold text-lg">₹{total}</div>
-              <div className="flex items-center gap-1 text-indigo-100 text-xs font-bold mt-0.5">
-                View Cart <ChevronRight className="w-3 h-3" />
+            <div className="flex items-center gap-3">
+              <div className="bg-on-secondary text-secondary rounded-full h-8 w-8 flex items-center justify-center font-bold shadow-sm text-sm">
+                {totalItems}
               </div>
+              <span className="font-bold uppercase tracking-wider text-xs">View Cart</span>
             </div>
-          </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-on-secondary/80">Subtotal</span>
+              <span className="font-headline text-lg font-bold text-on-secondary tracking-tight">₹{total}</span>
+            </div>
+          </button>
         </div>
       )}
 
@@ -956,8 +1222,8 @@ export function NewOrder({
             <div className="pt-2 pb-1 flex justify-center">
               <div className="h-1.5 w-12 rounded-full bg-slate-300" />
             </div>
-            <div className="flex justify-between items-center px-4 py-3 bg-white border-b border-slate-200 shrink-0">
-              <h2 className="text-lg font-bold text-slate-800">Your Order</h2>
+            <div className="flex justify-between items-center px-4 py-3 bg-white border-b border-outline-variant shrink-0">
+              <h2 className="text-base font-bold text-primary font-headline">Your Order</h2>
               <button
                 type="button"
                 onClick={() => setShowMobileCart(false)}

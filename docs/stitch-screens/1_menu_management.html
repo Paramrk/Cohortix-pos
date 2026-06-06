@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Menu Management - QuickServe POS</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=JetBrains+Mono:wght@500&amp;family=Hanken+Grotesk:wght@400&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-primary-fixed": "#131b2e",
+                        "error": "#ba1a1a",
+                        "surface-dim": "#cbdbf5",
+                        "surface-container-high": "#dce9ff",
+                        "surface-container-low": "#eff4ff",
+                        "surface-tint": "#565e74",
+                        "outline": "#76777d",
+                        "surface-container": "#e5eeff",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#783200",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-error": "#ffffff",
+                        "secondary-fixed-dim": "#4edea3",
+                        "on-secondary-fixed": "#002113",
+                        "tertiary-fixed": "#ffdbca",
+                        "on-background": "#0b1c30",
+                        "inverse-primary": "#bec6e0",
+                        "primary-fixed": "#dae2fd",
+                        "primary-container": "#131b2e",
+                        "inverse-surface": "#213145",
+                        "surface": "#f8f9ff",
+                        "secondary-fixed": "#6ffbbe",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary-container": "#6cf8bb",
+                        "primary": "#000000",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed": "#341100",
+                        "on-tertiary-container": "#d95f00",
+                        "tertiary-container": "#341100",
+                        "tertiary": "#000000",
+                        "on-secondary-container": "#00714d",
+                        "surface-variant": "#d3e4fe",
+                        "secondary": "#006c49",
+                        "primary-fixed-dim": "#bec6e0",
+                        "background": "#f8f9ff",
+                        "surface-bright": "#f8f9ff",
+                        "on-surface-variant": "#45464d",
+                        "on-surface": "#0b1c30",
+                        "on-error-container": "#93000a",
+                        "on-primary-container": "#7c839b",
+                        "tertiary-fixed-dim": "#ffb690",
+                        "outline-variant": "#c6c6cd"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "xs": "4px",
+                        "base": "4px",
+                        "touch-target-min": "44px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "margin-mobile": "16px",
+                        "gutter": "12px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Manrope"],
+                        "label-md": ["JetBrains Mono"],
+                        "display-lg": ["Manrope"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Manrope"],
+                        "headline-sm": ["Manrope"],
+                        "price-display": ["Manrope"],
+                        "body-md": ["Hanken Grotesk"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "price-display": ["28px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+        
+        /* Custom Toggle Switch Styles */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #6cf8bb; /* secondary-container */
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #6cf8bb; /* secondary-container */
+        }
+        .toggle-checkbox:checked + .toggle-label:after {
+            transform: translateX(100%);
+            border-color: white;
+        }
+        .toggle-label {
+            width: 50px;
+            height: 28px;
+            background-color: #c6c6cd; /* outline-variant */
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .toggle-label:after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Interactive scale */
+        .scale-98:active { transform: scale(0.98); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md antialiased pt-safe overflow-x-hidden min-h-screen pb-[90px]">
+<!-- TopAppBar -->
+<header class="bg-surface border-b border-outline-variant font-headline-sm text-headline-sm docked full-width top-0 sticky z-40 flat no shadows">
+<div class="flex justify-between items-center px-margin-mobile h-touch-target-min w-full">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center overflow-hidden">
+<span class="material-symbols-outlined text-primary" data-icon="person">person</span>
+</div>
+</div>
+<div class="font-headline-md text-headline-md font-bold text-primary">
+                QuickServe POS
+            </div>
+<button class="w-touch-target-min h-touch-target-min flex items-center justify-center hover:bg-surface-container-high transition-colors rounded-full text-primary scale-98 transition-transform duration-200">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="px-margin-mobile py-lg max-w-2xl mx-auto">
+<!-- Search and Filter Bar -->
+<div class="flex gap-sm mb-lg">
+<div class="relative flex-1">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="w-full h-11 pl-10 pr-4 rounded-lg border-2 border-outline-variant focus:border-secondary bg-surface-container-lowest text-on-surface font-body-md focus:outline-none transition-colors" placeholder="Search menu..." type="text"/>
+</div>
+<button class="w-11 h-11 rounded-lg border-2 border-outline-variant bg-surface-container-lowest flex items-center justify-center text-on-surface-variant hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined" data-icon="filter_list">filter_list</span>
+</button>
+</div>
+<!-- Categories Chips -->
+<div class="flex gap-sm overflow-x-auto pb-sm mb-md scrollbar-hide -mx-margin-mobile px-margin-mobile">
+<button class="px-4 py-2 rounded-full bg-primary text-on-primary font-label-md text-label-md whitespace-nowrap">All Items</button>
+<button class="px-4 py-2 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md whitespace-nowrap hover:bg-surface-variant transition-colors">Beverages</button>
+<button class="px-4 py-2 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md whitespace-nowrap hover:bg-surface-variant transition-colors">Sandwiches</button>
+<button class="px-4 py-2 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md whitespace-nowrap hover:bg-surface-variant transition-colors">Pastries</button>
+<button class="px-4 py-2 rounded-full bg-surface-container-high text-on-surface font-label-md text-label-md whitespace-nowrap hover:bg-surface-variant transition-colors">Salads</button>
+</div>
+<!-- Menu List -->
+<div class="space-y-sm">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-md scale-98 transition-transform duration-150">
+<div class="w-16 h-16 rounded-lg bg-surface-variant flex-shrink-0 overflow-hidden relative">
+<img alt="Avocado Toast" class="w-full h-full object-cover" data-alt="A top-down view of a modern avocado toast on artisanal sourdough bread, garnished with microgreens and a drizzle of olive oil, placed on a pristine white ceramic plate. The lighting is bright and even, casting soft shadows that highlight the textures of the fresh ingredients. The overall mood is fresh, healthy, and appetizing, fitting perfectly into a clean, modern SaaS POS interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy_Bux6Woi_sGP7bEFiSHk3VgfZCDEn8UMq4IbtkKyyGHxrTDlo0A12Rk_x277CnCiPrDjmNMcZ3PBvqE-LETvI8Fofe-wsHHjKsDWnEDZ0thGNReHxyDUIg7suZ6OSio_RYXx3FsgyNgiaWwUuZlyqHPfbBXnT4NqVbd1ze8oD4l9NIFLvBL7SfhNfW6paWA42I6B9QS8xlmOYPKlA5uIzntZh4rOzcZwRPLQWJu5je4czX6r21miyfqL0K39nCP0x_KXRqQbReXS"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Artisan Avocado Toast</h3>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Sourdough, microgreens, radish</p>
+<div class="font-price-display text-price-display text-primary mt-1 text-[20px] leading-[24px]">$12.50</div>
+</div>
+<div class="flex flex-col items-end gap-2 flex-shrink-0">
+<div class="relative inline-block w-[50px] mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 opacity-0" id="toggle1" name="toggle1" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-7 rounded-full bg-gray-300 cursor-pointer" for="toggle1"></label>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-md scale-98 transition-transform duration-150">
+<div class="w-16 h-16 rounded-lg bg-surface-variant flex-shrink-0 overflow-hidden relative">
+<img alt="Iced Matcha Latte" class="w-full h-full object-cover" data-alt="A tall glass of iced matcha latte with visible layers of rich green matcha and creamy white milk, condensation beading on the outside of the glass. It sits on a minimal, light-colored wooden counter under soft, natural daylight. The aesthetic is clean, refreshing, and highly appealing, designed to look premium within a retail management system." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD6bwgxhw1vQtWfMQOWjJmJ8hYXNGL98MyoY59AIotg2cRRZXD1NiNDklIy58nb6or2TsRaisAbjHBsH0qouuWX7PeG-GKroOv4i2CfcZ15YtQn_hCcz2bqAvR8IJabaRL1DVBUEoMVRtR61X6cnErGr03900D-KzkkzoSDJNN99szKAsuhgCHcapWC7gc4G5BNwNQvFl65LL6ohc0nGTDrxtbpRvCGAjEE1cHVHd2e8bhrgXtphFXnc3urgBCw7o6h-VxjEhYrH1Cy"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Iced Matcha Latte</h3>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Ceremonial grade, oat milk</p>
+<div class="font-price-display text-price-display text-primary mt-1 text-[20px] leading-[24px]">$6.00</div>
+</div>
+<div class="flex flex-col items-end gap-2 flex-shrink-0">
+<div class="relative inline-block w-[50px] mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 opacity-0" id="toggle2" name="toggle2" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-7 rounded-full bg-gray-300 cursor-pointer" for="toggle2"></label>
+</div>
+</div>
+</div>
+<!-- Item 3 (Out of stock) -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-md scale-98 transition-transform duration-150 opacity-60">
+<div class="w-16 h-16 rounded-lg bg-surface-variant flex-shrink-0 overflow-hidden relative">
+<div class="absolute inset-0 bg-surface/50 z-10 flex items-center justify-center">
+<span class="text-xs font-bold text-error bg-error-container px-2 py-1 rounded-md">OOS</span>
+</div>
+<img alt="Pour Over Coffee" class="w-full h-full object-cover" data-alt="A minimalist setup for a pour-over coffee, featuring a sleek black dripper over a glass carafe, resting on a stark white surface. The image is captured with high-key lighting, emphasizing the dark, rich color of the coffee against the bright background. The composition is structured and modern, conveying efficiency and high-quality preparation suited for a sophisticated POS interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOA6aavr-5KSkktptFDUp-KTYXsKrJCgG39mPHhiF_K9QpkAeolOcTSeq5hh1XAcRxyOYvfp920B5OMdx4t5-EkN3HyhJjQDmAKY588ioazytxra4Hv38MvISi9I1VWBXD25JwzWA1gkYdA2iOUgSGqYo78gZ3fcLdvulqW6xy2eyfPkT21JaNepcxLBNX9j9wTcL7YtpPlgGCJENYUwOE0rkoZ_Jf2hq0QtaGdQFrqG45bqnTqJowHHe0Wvk235WhoRsWnQXxla3n"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Single Origin Pour Over</h3>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Ethiopia Yirgacheffe</p>
+<div class="font-price-display text-price-display text-primary mt-1 text-[20px] leading-[24px]">$5.50</div>
+</div>
+<div class="flex flex-col items-end gap-2 flex-shrink-0">
+<div class="relative inline-block w-[50px] mr-2 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 opacity-0" id="toggle3" name="toggle3" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-7 rounded-full bg-gray-300 cursor-pointer" for="toggle3"></label>
+</div>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-3 flex items-center gap-md scale-98 transition-transform duration-150">
+<div class="w-16 h-16 rounded-lg bg-surface-variant flex-shrink-0 overflow-hidden relative">
+<img alt="Croissant" class="w-full h-full object-cover" data-alt="A perfectly flaky, golden-brown butter croissant resting on a simple, elegant slate plate. The lighting is warm and directional, highlighting the delicate, layered texture of the pastry. The background is slightly out of focus, drawing all attention to the baked good, creating an inviting and premium visual for a cafe menu application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDDhlYDqy-8XCyyBHMgQlUfMHD1s-u7FqvmFHEgnzitPPsRyXruSq3OlIlKVw0EQQlUnTy7hmREdqYllDTp4SF_TMwZd9TmnnEbDahecsqX7VFrhEC93qfHl-kyJ3TyV35wqxrr6A6jsvKTcyfG5dDKROSvpcmYWbLrOHoR5i4g-aojVuv4_1PZMeFDWcdR0AbaGMVKrBIXop6rAKHdceh1CYl0xPafOKArCZH6UHY_QgnSwcfniw6SUtwz-5qJecbKtvuc-PQ-Ybgc"/>
+</div>
+<div class="flex-1 min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">Butter Croissant</h3>
+<p class="font-body-md text-body-md text-on-surface-variant truncate">Freshly baked daily</p>
+<div class="font-price-display text-price-display text-primary mt-1 text-[20px] leading-[24px]">$4.25</div>
+</div>
+<div class="flex flex-col items-end gap-2 flex-shrink-0">
+<div class="relative inline-block w-[50px] mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 opacity-0" id="toggle4" name="toggle4" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-7 rounded-full bg-gray-300 cursor-pointer" for="toggle4"></label>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- FAB -->
+<button aria-label="Add Item" class="fixed bottom-24 right-margin-mobile w-14 h-14 bg-secondary text-on-secondary rounded-2xl shadow-md flex items-center justify-center z-40 scale-98 active:scale-95 transition-transform duration-150">
+<span class="material-symbols-outlined text-[28px]" data-icon="add">add</span>
+</button>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container fixed bottom-0 w-full z-50 rounded-t-xl shadow-md fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 pb-safe md:hidden">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 transition-all duration-150 w-16 rounded-xl py-1">
+<span class="material-symbols-outlined mb-1" data-icon="add_shopping_cart">add_shopping_cart</span>
+<span class="font-label-md text-label-md text-[10px] leading-tight">New Order</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 transition-all duration-150 w-16 rounded-xl py-1">
+<span class="material-symbols-outlined mb-1" data-icon="format_list_bulleted">format_list_bulleted</span>
+<span class="font-label-md text-label-md text-[10px] leading-tight">Queue</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 transition-all duration-150 w-16 rounded-xl py-1">
+<span class="material-symbols-outlined mb-1" data-icon="query_stats">query_stats</span>
+<span class="font-label-md text-label-md text-[10px] leading-tight">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 transition-all duration-150 w-auto">
+<span class="material-symbols-outlined mb-1" data-icon="restaurant_menu" data-weight="fill" style="font-variation-settings: 'FILL' 1;">restaurant_menu</span>
+<span class="font-label-md text-label-md text-[10px] leading-tight font-bold">Menu</span>
+</button>
+</nav>
+</body></html>

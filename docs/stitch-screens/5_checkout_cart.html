@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>QuickServe POS - Checkout</title>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#783200",
+                        "on-error-container": "#93000a",
+                        "tertiary-container": "#341100",
+                        "surface-container-low": "#eff4ff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-primary": "#ffffff",
+                        "on-secondary-container": "#00714d",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container": "#e5eeff",
+                        "surface-variant": "#d3e4fe",
+                        "secondary-container": "#6cf8bb",
+                        "tertiary-fixed": "#ffdbca",
+                        "surface-dim": "#cbdbf5",
+                        "inverse-surface": "#213145",
+                        "inverse-on-surface": "#eaf1ff",
+                        "background": "#f8f9ff",
+                        "primary-fixed": "#dae2fd",
+                        "on-error": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "secondary-fixed": "#6ffbbe",
+                        "on-surface": "#0b1c30",
+                        "surface": "#f8f9ff",
+                        "on-tertiary-fixed": "#341100",
+                        "surface-tint": "#565e74",
+                        "on-secondary-fixed": "#002113",
+                        "on-surface-variant": "#45464d",
+                        "on-secondary-fixed-variant": "#005236",
+                        "on-primary-container": "#7c839b",
+                        "on-primary-fixed": "#131b2e",
+                        "tertiary-fixed-dim": "#ffb690",
+                        "secondary": "#006c49",
+                        "on-secondary": "#ffffff",
+                        "secondary-fixed-dim": "#4edea3",
+                        "inverse-primary": "#bec6e0",
+                        "primary": "#000000",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-tertiary-container": "#d95f00",
+                        "error-container": "#ffdad6",
+                        "outline-variant": "#c6c6cd",
+                        "on-background": "#0b1c30",
+                        "outline": "#76777d",
+                        "primary-container": "#131b2e",
+                        "error": "#ba1a1a",
+                        "tertiary": "#000000"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "md": "16px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "gutter": "12px",
+                        "base": "4px",
+                        "touch-target-min": "44px",
+                        "margin-mobile": "16px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "price-display": ["Manrope"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "headline-lg-mobile": ["Manrope"],
+                        "body-md": ["Hanken Grotesk"],
+                        "headline-sm": ["Manrope"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-md": ["Manrope"],
+                        "display-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "price-display": ["28px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Hide scrollbar for clean POS look */
+        ::-webkit-scrollbar {
+            display: none;
+        }
+        body {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            /* Prevent pull-to-refresh on mobile browsers */
+            overscroll-behavior-y: contain;
+        }
+        
+        /* Inner glow for primary checkout button */
+        .btn-checkout {
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.3);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex flex-col relative pb-safe selection:bg-secondary-container selection:text-on-secondary-container">
+<!-- TopAppBar (Modified for Checkout flow - Back button instead of Avatar) -->
+<header class="bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline flex justify-between items-center px-margin-mobile h-[64px] w-full sticky top-0 z-40">
+<button class="w-touch-target-min h-touch-target-min flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-full active:scale-95">
+<span class="material-symbols-outlined text-[24px]">arrow_back</span>
+</button>
+<div class="font-headline-sm text-headline-sm text-primary dark:text-primary-fixed-dim absolute left-1/2 -translate-x-1/2">
+            Checkout
+        </div>
+<button class="w-touch-target-min h-touch-target-min flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors rounded-full active:scale-95">
+<span class="material-symbols-outlined text-[24px]">more_vert</span>
+</button>
+</header>
+<!-- Main Scrollable Canvas -->
+<main class="flex-1 overflow-y-auto px-margin-mobile py-lg space-y-xl pb-[180px]"> <!-- Extra bottom padding for sticky checkout area -->
+<!-- Dining Option Toggle -->
+<section aria-label="Dining Option">
+<div class="flex bg-surface-container-high rounded-lg p-1 relative w-full h-[48px]">
+<button class="flex-1 flex items-center justify-center font-label-md text-label-md bg-surface text-on-surface rounded-md shadow-sm z-10 transition-all">
+                    Dine In
+                </button>
+<button class="flex-1 flex items-center justify-center font-label-md text-label-md text-on-surface-variant z-10 transition-all hover:bg-surface-variant rounded-md">
+                    Take Away
+                </button>
+</div>
+</section>
+<!-- Cart Items List -->
+<section aria-label="Cart Items" class="space-y-0 border border-outline-variant rounded-xl bg-surface-container-lowest overflow-hidden">
+<!-- Item 1 -->
+<div class="flex items-center justify-between p-md border-b border-outline-variant last:border-0 bg-surface-container-lowest">
+<div class="flex items-start gap-sm flex-1">
+<div class="w-12 h-12 rounded bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">coffee</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md font-semibold text-on-surface line-clamp-2">Artisan Vanilla Latte</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-xs">Large, Oat Milk</span>
+</div>
+</div>
+<div class="flex flex-col items-end ml-sm shrink-0">
+<span class="font-headline-sm text-headline-sm text-primary">$5.50</span>
+<!-- Quantity Stepper -->
+<div class="flex items-center border border-outline-variant rounded-lg mt-sm h-[36px] bg-surface">
+<button class="w-[36px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-l-lg transition-colors">
+<span class="material-symbols-outlined text-[20px]">remove</span>
+</button>
+<span class="w-[32px] text-center font-label-md text-label-md text-on-surface">1</span>
+<button class="w-[36px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-r-lg transition-colors">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center justify-between p-md border-b border-outline-variant last:border-0 bg-surface-container-lowest">
+<div class="flex items-start gap-sm flex-1">
+<div class="w-12 h-12 rounded bg-surface-container-high flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">bakery_dining</span>
+</div>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md font-semibold text-on-surface line-clamp-2">Butter Croissant</span>
+<span class="font-label-md text-label-md text-on-surface-variant mt-xs">Warmed</span>
+</div>
+</div>
+<div class="flex flex-col items-end ml-sm shrink-0">
+<span class="font-headline-sm text-headline-sm text-primary">$3.75</span>
+<!-- Quantity Stepper -->
+<div class="flex items-center border border-outline-variant rounded-lg mt-sm h-[36px] bg-surface">
+<button class="w-[36px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-l-lg transition-colors">
+<span class="material-symbols-outlined text-[20px]">remove</span>
+</button>
+<span class="w-[32px] text-center font-label-md text-label-md text-on-surface">2</span>
+<button class="w-[36px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-variant rounded-r-lg transition-colors">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Add Item Button -->
+<button class="w-full flex items-center justify-center gap-sm p-md text-secondary hover:bg-surface-container-low transition-colors font-label-md text-label-md active:bg-surface-variant">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+                Add Note or Item
+            </button>
+</section>
+<!-- Payment Method Selection -->
+<section aria-label="Payment Method" class="space-y-sm">
+<h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider pl-1">Payment Method</h2>
+<div class="grid grid-cols-3 gap-sm">
+<!-- Selected Method -->
+<button class="flex flex-col items-center justify-center p-md rounded-lg border-2 border-secondary bg-surface-container-lowest text-secondary h-[88px] relative transition-transform active:scale-95 shadow-[0_4px_12px_rgba(33,49,69,0.05)]">
+<span class="material-symbols-outlined text-[28px] mb-xs" data-weight="fill">credit_card</span>
+<span class="font-label-md text-label-md">Card</span>
+<!-- Checkmark Badge -->
+<div class="absolute -top-2 -right-2 w-6 h-6 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[14px]" data-weight="fill">check</span>
+</div>
+</button>
+<!-- Unselected Methods -->
+<button class="flex flex-col items-center justify-center p-md rounded-lg border border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low h-[88px] transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[28px] mb-xs">payments</span>
+<span class="font-label-md text-label-md">Cash</span>
+</button>
+<button class="flex flex-col items-center justify-center p-md rounded-lg border border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low h-[88px] transition-transform active:scale-95">
+<span class="material-symbols-outlined text-[28px] mb-xs">contactless</span>
+<span class="font-label-md text-label-md">Mobile</span>
+</button>
+</div>
+</section>
+</main>
+<!-- Sticky Bottom Checkout Area -->
+<section class="fixed bottom-0 left-0 w-full bg-surface-container-lowest border-t border-outline-variant shadow-[0_-4px_24px_rgba(11,28,48,0.08)] z-50 rounded-t-xl px-margin-mobile py-md pb-safe">
+<!-- Summary Row -->
+<div class="flex justify-between items-end mb-md">
+<div class="flex flex-col space-y-xs">
+<div class="flex items-center text-on-surface-variant font-body-md text-body-md">
+<span>Subtotal</span>
+<span class="ml-2">$13.00</span>
+</div>
+<div class="flex items-center text-on-surface-variant font-body-md text-body-md">
+<span>Tax (8%)</span>
+<span class="ml-2">$1.04</span>
+</div>
+</div>
+<div class="flex flex-col items-end">
+<span class="font-label-md text-label-md text-on-surface-variant">Total</span>
+<span class="font-price-display text-price-display text-primary">$14.04</span>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full h-[56px] bg-secondary text-on-secondary rounded-lg font-headline-sm text-headline-sm flex items-center justify-center gap-sm active:scale-98 transition-transform btn-checkout">
+<span class="material-symbols-outlined">point_of_sale</span>
+            Charge $14.04
+        </button>
+</section>
+<script>
+        // Simple script to handle segmented control toggle visually
+        document.addEventListener('DOMContentLoaded', () => {
+            const diningButtons = document.querySelectorAll('section[aria-label="Dining Option"] button');
+            
+            diningButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Reset all
+                    diningButtons.forEach(b => {
+                        b.className = 'flex-1 flex items-center justify-center font-label-md text-label-md text-on-surface-variant z-10 transition-all hover:bg-surface-variant rounded-md';
+                    });
+                    // Set active
+                    e.currentTarget.className = 'flex-1 flex items-center justify-center font-label-md text-label-md bg-surface text-on-surface rounded-md shadow-sm z-10 transition-all';
+                });
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>QuickServe POS - Dashboard</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed-variant": "#005236",
+                      "on-primary-fixed": "#131b2e",
+                      "error": "#ba1a1a",
+                      "surface-dim": "#cbdbf5",
+                      "surface-container-high": "#dce9ff",
+                      "surface-container-low": "#eff4ff",
+                      "surface-tint": "#565e74",
+                      "outline": "#76777d",
+                      "surface-container": "#e5eeff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#783200",
+                      "on-primary-fixed-variant": "#3f465c",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-error": "#ffffff",
+                      "secondary-fixed-dim": "#4edea3",
+                      "on-secondary-fixed": "#002113",
+                      "tertiary-fixed": "#ffdbca",
+                      "on-background": "#0b1c30",
+                      "inverse-primary": "#bec6e0",
+                      "primary-fixed": "#dae2fd",
+                      "primary-container": "#131b2e",
+                      "inverse-surface": "#213145",
+                      "surface": "#f8f9ff",
+                      "secondary-fixed": "#6ffbbe",
+                      "surface-container-highest": "#d3e4fe",
+                      "secondary-container": "#6cf8bb",
+                      "primary": "#000000",
+                      "on-tertiary": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed": "#341100",
+                      "on-tertiary-container": "#d95f00",
+                      "tertiary-container": "#341100",
+                      "tertiary": "#000000",
+                      "on-secondary-container": "#00714d",
+                      "surface-variant": "#d3e4fe",
+                      "secondary": "#006c49",
+                      "primary-fixed-dim": "#bec6e0",
+                      "background": "#f8f9ff",
+                      "surface-bright": "#f8f9ff",
+                      "on-surface-variant": "#45464d",
+                      "on-surface": "#0b1c30",
+                      "on-error-container": "#93000a",
+                      "on-primary-container": "#7c839b",
+                      "tertiary-fixed-dim": "#ffb690",
+                      "outline-variant": "#c6c6cd"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "lg": "24px",
+                      "xs": "4px",
+                      "base": "4px",
+                      "touch-target-min": "44px",
+                      "xl": "32px",
+                      "md": "16px",
+                      "sm": "8px",
+                      "margin-mobile": "16px",
+                      "gutter": "12px"
+              },
+              "fontFamily": {
+                      "headline-md": ["Manrope"],
+                      "label-md": ["JetBrains Mono"],
+                      "display-lg": ["Manrope"],
+                      "body-lg": ["Hanken Grotesk"],
+                      "headline-lg-mobile": ["Manrope"],
+                      "headline-sm": ["Manrope"],
+                      "price-display": ["Manrope"],
+                      "body-md": ["Hanken Grotesk"]
+              },
+              "fontSize": {
+                      "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                      "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                      "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                      "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }],
+                      "headline-lg-mobile": ["24px", { "lineHeight": "30px", "fontWeight": "700" }],
+                      "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                      "price-display": ["28px", { "lineHeight": "32px", "fontWeight": "700" }],
+                      "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body { background-color: #e5eeff; } /* Outer background for desktop viewing */
+        /* Hide scrollbar for a cleaner mobile app feel */
+        ::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="flex justify-center antialiased text-on-background">
+<!-- Mobile App Container -->
+<div class="w-full max-w-md bg-background min-h-screen relative shadow-2xl overflow-hidden flex flex-col">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full max-w-md z-40 bg-surface shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex justify-between items-center px-margin-mobile h-touch-target-min">
+<!-- Leading Avatar -->
+<button class="w-8 h-8 rounded-full overflow-hidden border border-outline-variant hover:bg-surface-container-high transition-colors scale-98 transition-transform duration-200">
+<img alt="Store Manager Profile" class="w-full h-full object-cover" data-alt="A close-up headshot of a friendly retail store manager with short hair, wearing a dark apron over a light shirt. The lighting is bright and modern, set inside a well-lit cafe environment. The image is cropped tightly into a perfect circle, serving as an avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQDWBTao800fJt2w_cnIZvONXQCAg3XxZ8ObOXmuKp4deE2xpnC4lLWupuQJVkK4m19SKu13JmvXfbrB7q74m0ElSnv_annZ1pOtaHclQBS4vQERartuFOAx67Hu7TNanfNTiXSm18WEVweqaXZvpX6KpL1lZNIzVV8Uqrbg0Cl6rsTu1RiN9WFBE94ztwKDhkLr7OnpvDtLDisdWpTw6XciNa6MaGd5bIJx6cMC3xcgnASlzs3aXs7ZOU_abYDx9QfjPRcMrANsII"/>
+</button>
+<!-- Brand -->
+<h1 class="font-headline-md text-headline-md font-bold text-primary text-center flex-1">QuickServe POS</h1>
+<!-- Trailing Icon -->
+<button aria-label="Settings" class="w-touch-target-min h-touch-target-min flex items-center justify-end text-primary hover:bg-surface-container-high transition-colors scale-98 transition-transform duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span>
+</button>
+</header>
+<!-- Main Content Scrollable Area -->
+<main class="flex-1 overflow-y-auto no-scrollbar pt-[60px] pb-[90px] px-margin-mobile flex flex-col gap-sm">
+<!-- Date Context -->
+<div class="pt-sm pb-xs">
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Tuesday, Oct 24</p>
+</div>
+<!-- Primary Metric: Today's Sales Card -->
+<section class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-sm relative overflow-hidden shadow-sm">
+<!-- Decorative subtle gradient blob -->
+<div class="absolute -top-10 -right-10 w-32 h-32 bg-secondary-container rounded-full blur-3xl opacity-30 pointer-events-none"></div>
+<div class="flex justify-between items-start z-10">
+<h2 class="font-label-md text-label-md text-on-surface-variant">Today's Sales</h2>
+<span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">trending_up</span>
+</div>
+<div class="z-10">
+<div class="font-price-display text-price-display text-primary">$4,285.50</div>
+<div class="flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-secondary text-[16px]">arrow_upward</span>
+<span class="font-label-md text-label-md text-secondary">+12.5% vs yesterday</span>
+</div>
+</div>
+<!-- Sparkline Chart SVG -->
+<div class="w-full h-16 mt-2 z-10">
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 100 30">
+<!-- Subtle fill -->
+<path d="M0,30 L0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0 L100,30 Z" fill="#6cf8bb" opacity="0.1"></path>
+<!-- Line -->
+<path d="M0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0" fill="none" stroke="#006c49" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<!-- Current Point -->
+<circle cx="100" cy="0" fill="#ffffff" r="2.5" stroke="#006c49" stroke-width="1.5"></circle>
+</svg>
+</div>
+</section>
+<!-- Secondary Metrics Grid -->
+<section class="grid grid-cols-2 gap-sm">
+<!-- Average Order Value -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-xs shadow-sm">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">receipt_long</span>
+<h3 class="font-label-md text-label-md">AOV</h3>
+</div>
+<div class="font-headline-sm text-headline-sm text-primary mt-1">$32.40</div>
+</div>
+<!-- Total Transactions -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col gap-xs shadow-sm">
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">point_of_sale</span>
+<h3 class="font-label-md text-label-md">Transactions</h3>
+</div>
+<div class="font-headline-sm text-headline-sm text-primary mt-1">132</div>
+</div>
+</section>
+<!-- Top Selling Items List -->
+<section class="mt-sm flex flex-col gap-sm">
+<h2 class="font-headline-sm text-headline-sm text-primary">Top Selling Items</h2>
+<div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<!-- Item 1 -->
+<div class="flex items-center gap-md p-md border-b border-outline-variant last:border-b-0 hover:bg-surface-container-low transition-colors">
+<img alt="Artisan Espresso" class="w-12 h-12 rounded-lg object-cover bg-surface-variant" data-alt="A top-down, close-up shot of a freshly poured artisan espresso in a pristine white ceramic cup. The rich, dark crema forms a perfect circle with delicate caramel-colored marbling. The lighting is bright and even, highlighting the glossy texture of the coffee against a minimalist, clean white countertop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBK7nQgo6ZYkcOJl19-qv9c8Ynn8BairOX_xg5zwTZGTsn1Ljvy3XhB46ThUpUiAplZS8iS7DIxOPTAS49EjMxHmO8bQ6fyKxyYPraKT0gNNcMEANIe7cSLvjzDp51CFjiAyJ_PgzUshzndlEq72j2Gr24bPZ1orWdMNXeg71dn8fbtKve3Ogl82g2X7l9JyWRxT1b64075_MKUwE5-iWjfNHaWl_AQTmB5-sGaD2KfAU53tGY9gm0RVwnT8u73LutESiN-gxpp3iXq"/>
+<div class="flex-1 flex flex-col gap-1">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-medium text-primary">Artisan Espresso</span>
+<span class="font-label-md text-label-md text-on-surface-variant">48 sold</span>
+</div>
+<!-- Mini Progress Bar -->
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 85%;"></div>
+</div>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center gap-md p-md border-b border-outline-variant last:border-b-0 hover:bg-surface-container-low transition-colors">
+<img alt="Avocado Toast" class="w-12 h-12 rounded-lg object-cover bg-surface-variant" data-alt="A beautifully plated avocado toast on thick-cut sourdough bread, resting on a matte white plate. The avocado is thinly sliced and fanned out perfectly, garnished with a sprinkle of chili flakes and microgreens. The lighting is bright and natural, casting soft, appetizing shadows in a modern cafe setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEOF5Mdr4NVTIw23FGo39iryBLHKusypvIcWZZNpNCuo12co2MznjA5ohvvS3gVrtoPAp6aK0EzKMsJZRmpk-_n6IqwqZzhciAdS_4atiYirkeKxufK5Cga3EqPH87MTGcqdfBS5RDAlxhxcflq1Bkp21TxrjWWD17MQgQGLUrF-SW4ISghwn5eCUUVDzMxqpVHe0FbFxxMznu6ksE8R8Vb9QRFJe_UcBuNT3aM0nth6xuVpmAg-RYicfxyfXk4hBShcVHHN8LSM2o"/>
+<div class="flex-1 flex flex-col gap-1">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-medium text-primary">Avocado Toast</span>
+<span class="font-label-md text-label-md text-on-surface-variant">32 sold</span>
+</div>
+<!-- Mini Progress Bar -->
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary-fixed-dim h-full rounded-full" style="width: 60%;"></div>
+</div>
+</div>
+</div>
+<!-- Item 3 -->
+<div class="flex items-center gap-md p-md border-b border-outline-variant last:border-b-0 hover:bg-surface-container-low transition-colors">
+<img alt="Matcha Latte" class="w-12 h-12 rounded-lg object-cover bg-surface-variant" data-alt="A tall glass of iced matcha latte layered elegantly with stark white milk at the bottom and vibrant green tea at the top. Sweating condensation coats the outside of the glass. The background is a clean, bright minimalist cafe environment with soft, high-key lighting enhancing the vivid green color." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDD9FegzHlh9wsZ9YkmasGDaekNjflNGfjdAd8QlaqmlMsnEtxoWTXVEFoPTgismoHdZ4komSdR7oBLhJwG-mOOLtA8_WL-jcYHBVcTw15IyMOKu9HBks4tpbN8t4J1uz2Zi-Hzt4HYHlE360nNXI4oikE_fhhT_fZgJHzu8bPYZGb_j36-_DjQ3EMwjZ42YMh-C8hYGb0trvLCwdzOKNI9cy4JFeiasuYMAu3lIbhF3IBlVqebe0xKAUtjZdorJ2obnPmVLytRs80A"/>
+<div class="flex-1 flex flex-col gap-1">
+<div class="flex justify-between items-center">
+<span class="font-body-md text-body-md font-medium text-primary">Iced Matcha Latte</span>
+<span class="font-label-md text-label-md text-on-surface-variant">24 sold</span>
+</div>
+<!-- Mini Progress Bar -->
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary-fixed-dim h-full rounded-full opacity-70" style="width: 45%;"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Spacer for bottom padding to ensure final item is above nav -->
+<div class="h-4"></div>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 right-0 w-full max-w-md mx-auto z-50 rounded-t-xl bg-surface-container dark:bg-surface-container-high shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex justify-around items-center px-2 py-2 pb-safe">
+<!-- Inactive: New Order -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 hover:bg-surface-container-highest transition-colors rounded-lg scale-98 active:scale-95 transition-all duration-150">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">add_shopping_cart</span>
+<span class="font-label-md text-[10px] leading-tight">New Order</span>
+</button>
+<!-- Inactive: Queue -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 hover:bg-surface-container-highest transition-colors rounded-lg scale-98 active:scale-95 transition-all duration-150 relative">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">format_list_bulleted</span>
+<span class="font-label-md text-[10px] leading-tight">Queue</span>
+<!-- Badge -->
+<span class="absolute top-1 right-3 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<!-- Active: Dashboard -->
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 h-14 scale-98 active:scale-95 transition-all duration-150">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">query_stats</span>
+<span class="font-label-md text-[10px] leading-tight font-bold">Dashboard</span>
+</button>
+<!-- Inactive: Menu -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant w-16 h-14 hover:bg-surface-container-highest transition-colors rounded-lg scale-98 active:scale-95 transition-all duration-150">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">restaurant_menu</span>
+<span class="font-label-md text-[10px] leading-tight">Menu</span>
+</button>
+</nav>
+</div>
+</body></html>

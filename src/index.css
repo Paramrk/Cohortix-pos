@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -7,7 +6,59 @@
 }
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Manrope", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Custom Color Tokens from Stitch Design System */
+  --color-primary: #000000;
+  --color-secondary: #006c49;
+  --color-background: #f8f9ff;
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-bright: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container-highest: #d3e4fe;
+  --color-surface-variant: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #45464d;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+  
+  --color-primary-container: #131b2e;
+  --color-on-primary-container: #7c839b;
+  --color-secondary-container: #6cf8bb;
+  --color-on-secondary-container: #00714d;
+  
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+
+  --color-on-secondary-fixed-variant: #005236;
+  --color-on-primary-fixed: #131b2e;
+  --color-on-tertiary-fixed-variant: #783200;
+  --color-on-primary-fixed-variant: #3f465c;
+  --color-inverse-on-surface: #eaf1ff;
+  --color-secondary-fixed-dim: #4edea3;
+  --color-on-secondary-fixed: #002113;
+  --color-tertiary-fixed: #ffdbca;
+  --color-on-background: #0b1c30;
+  --color-inverse-primary: #bec6e0;
+  --color-primary-fixed: #dae2fd;
+  --color-inverse-surface: #213145;
+  --color-secondary-fixed: #6ffbbe;
+  --color-on-tertiary: #ffffff;
+  --color-on-primary: #ffffff;
+  --color-on-tertiary-fixed: #341100;
+  --color-on-tertiary-container: #d95f00;
+  --color-tertiary-container: #341100;
+  --color-tertiary: #000000;
+  --color-primary-fixed-dim: #bec6e0;
+  --color-tertiary-fixed-dim: #ffb690;
 }
 
 @layer utilities {
@@ -23,6 +74,58 @@
   /* Position floating elements (e.g. toast) just above the bottom nav */
   .mobile-floating-offset {
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
+  }
+
+  /* Hide scrollbar for category row */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Custom Toggle Switch Styles */
+  .toggle-checkbox:checked {
+    right: 0;
+    border-color: #6cf8bb;
+  }
+  .toggle-checkbox:checked + .toggle-label {
+    background-color: #6cf8bb;
+  }
+  .toggle-checkbox:checked + .toggle-label:after {
+    transform: translateX(22px);
+    border-color: white;
+  }
+  .toggle-label {
+    width: 50px;
+    height: 28px;
+    background-color: #c6c6cd;
+    border-radius: 9999px;
+    position: relative;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: block;
+  }
+  .toggle-label:after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    background-color: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  }
+
+  .scale-98:active {
+    transform: scale(0.98);
+  }
+
+  .btn-checkout {
+    box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.3);
   }
 }
 

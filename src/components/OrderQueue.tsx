@@ -166,71 +166,83 @@ function OrderCard({
   };
 
   return (
-    <div className={`bg-white rounded-xl shadow-sm border p-4 ${isPending ? 'border-orange-200' : 'border-emerald-200 opacity-75'}`}>
+    <div className={`bg-surface-container-lowest rounded-xl shadow-sm border p-4 scale-98 active:scale-[0.99] transition-transform duration-150 relative overflow-hidden ${isPending ? 'border-outline-variant' : 'border-outline-variant opacity-75'}`}>
       <div className="flex justify-between items-start gap-3 mb-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className={`text-lg font-bold ${isPending ? 'text-orange-600' : 'text-emerald-600'}`}>
+            <span className={`text-lg font-bold font-headline ${isPending ? 'text-slate-800' : 'text-slate-500'}`}>
               #{order.orderNumber}
             </span>
-            <span className="text-xs sm:text-sm text-slate-500 flex items-center gap-1 shrink-0">
+            <span className="text-xs text-slate-400 flex items-center gap-1 shrink-0 font-mono">
               <Clock className="w-3 h-3" /> {formatTime(order.timestamp)}
             </span>
           </div>
-          <div className="text-slate-700 font-medium flex items-center gap-1 mt-1 break-words">
-            <User className="w-4 h-4 text-slate-400" />
+          <div className="text-slate-700 font-semibold flex items-center gap-1 mt-1 break-words text-sm">
+            <User className="w-3.5 h-3.5 text-slate-400" />
             {order.customerName}
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="font-bold text-slate-800">₹{order.total}</div>
-          <div
-            className={`text-[10px] font-bold uppercase tracking-wider mt-1 px-2 py-0.5 rounded inline-block ${isUnpaid
-              ? 'bg-rose-100 text-rose-700'
-              : 'bg-slate-100 text-slate-500'
+          <div className="font-bold text-slate-800 font-headline">₹{order.total}</div>
+          <div className="flex flex-col items-end gap-1.5 mt-1">
+            <div
+              className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full inline-block border ${
+                isUnpaid
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-secondary-container text-on-secondary-container border-transparent'
               }`}
-          >
-            {isUnpaid ? 'UNPAID' : order.paymentMethod}
+            >
+              {isUnpaid ? 'UNPAID' : order.paymentMethod.toUpperCase()}
+            </div>
+            <div
+              className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full inline-block border ${
+                isPending
+                  ? 'bg-error-container text-on-error-container border-transparent'
+                  : 'bg-secondary-container text-on-secondary-container border-transparent'
+              }`}
+            >
+              {isPending ? 'Preparing' : 'Done'}
+            </div>
           </div>
         </div>
       </div>
 
       {parcelNote && (
-        <div className="mb-3 p-2.5 rounded-lg border border-orange-200 bg-orange-50 text-sm text-orange-900">
-          <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Special Note</span>
+        <div className="mb-3 p-2.5 rounded-lg border border-secondary/20 bg-secondary-container/10 text-xs text-on-secondary-container font-semibold">
+          <span className="font-bold uppercase tracking-wide text-[9px] mr-2">Special Note</span>
           {parcelNote}
         </div>
       )}
 
       {visibleInstructions && (
-        <div className="mb-3 p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
-          <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Instructions</span>
+        <div className="mb-3 p-2.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 font-medium">
+          <span className="font-bold uppercase tracking-wide text-[9px] mr-2">Instructions</span>
           {visibleInstructions}
         </div>
       )}
 
-      <div className="bg-slate-50 rounded-lg p-3 mb-4 space-y-2 border border-slate-100">
+      <div className="bg-surface rounded-xl p-3 mb-4 space-y-2 border border-outline-variant/50">
         {order.items.map((item, idx) => {
           const rawItem = item as unknown as Record<string, unknown>;
           const variant = getItemVariant(rawItem);
           const category = getItemCategory(rawItem, menuItemsById);
           return (
-            <div key={idx} className="flex justify-between text-sm items-start gap-2">
+            <div key={idx} className="flex justify-between text-xs items-start gap-2">
               <span className="text-slate-700 flex items-start gap-2 min-w-0 flex-1">
-                <span className="font-bold text-slate-900 bg-white border border-slate-200 w-6 h-6 flex items-center justify-center rounded-md">
+                <span className="font-bold text-slate-900 bg-surface-container-lowest border border-outline-variant w-5.5 h-5.5 flex items-center justify-center rounded font-mono text-[10px]">
                   {item.quantity}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="font-medium break-words block">{item.name}</span>
+                  <span className="font-semibold break-words block text-xs text-slate-800">{item.name}</span>
                   {(category || variant) && (
                     <span className="mt-1 flex flex-wrap gap-1.5">
                       {category && (
-                        <span className="text-[10px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-[9px] uppercase tracking-wider font-bold bg-secondary-container text-on-secondary-container px-1.5 py-0.5 rounded shrink-0">
                           {category}
                         </span>
                       )}
                       {variant && (
-                        <span className="text-[10px] uppercase tracking-wider font-bold bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-[9px] uppercase tracking-wider font-bold bg-surface-variant text-on-surface px-1.5 py-0.5 rounded border border-outline-variant shrink-0">
                           {variant}
                         </span>
                       )}
@@ -244,25 +256,23 @@ function OrderCard({
       </div>
 
       {isUnpaid && (
-        <div className="mb-4 pt-3 border-t border-slate-100">
+        <div className="mb-4 pt-3 border-t border-outline-variant/40">
           {settlingOrderId === order.id ? (
-            <div className="space-y-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div className="flex justify-center p-2 bg-white rounded-lg border border-slate-200">
-              </div>
-              <p className="text-center text-xs font-medium text-slate-500">Scan to pay ₹{order.total}</p>
-              <p className="text-center text-[11px] text-slate-500">
+            <div className="space-y-3 bg-surface p-3 rounded-xl border border-outline-variant">
+              <p className="text-center text-xs font-semibold text-slate-700">Scan to pay ₹{order.total}</p>
+              <p className="text-center text-[10px] text-slate-500">
                 Select received method to mark payment as paid
               </p>
               <div className="space-y-1">
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-600">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
                   Special Note (Optional)
                 </label>
                 <textarea
                   value={paymentNote}
                   onChange={(e) => setPaymentNote(e.target.value)}
                   disabled={isBusy}
-                  rows={3}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  rows={2}
+                  className="w-full rounded-lg border border-outline-variant bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-secondary"
                   placeholder="Add payment note, reference, or special remark"
                 />
               </div>
@@ -278,7 +288,7 @@ function OrderCard({
                     }
                   }}
                   disabled={isBusy}
-                  className="flex-1 min-h-11 bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
+                  className="flex-1 h-[38px] bg-secondary hover:opacity-90 text-on-secondary py-1.5 rounded-lg text-xs font-bold transition-all scale-98 active:scale-95 duration-150"
                 >
                   Cash Received
                 </button>
@@ -293,7 +303,7 @@ function OrderCard({
                     }
                   }}
                   disabled={isBusy}
-                  className="flex-1 min-h-11 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-sm font-bold transition-colors"
+                  className="flex-1 h-[38px] bg-blue-600 hover:opacity-90 text-white py-1.5 rounded-lg text-xs font-bold transition-all scale-98 active:scale-95 duration-150"
                 >
                   UPI Received
                 </button>
@@ -304,7 +314,7 @@ function OrderCard({
                   setSettlingOrderId(null);
                 }}
                 disabled={isBusy}
-                className="w-full text-slate-500 hover:text-slate-700 text-sm font-medium py-1 transition-colors"
+                className="w-full text-slate-500 hover:text-slate-700 text-xs font-bold py-1 transition-colors"
               >
                 Cancel
               </button>
@@ -312,7 +322,7 @@ function OrderCard({
           ) : (
             <button
               onClick={() => setSettlingOrderId(order.id)}
-              className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2"
+              className="w-full h-11 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 py-2 rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 active:scale-[0.98]"
             >
               Settle Payment (₹{order.total})
             </button>
@@ -320,10 +330,10 @@ function OrderCard({
         </div>
       )}
 
-      <div className="mb-4 pt-3 border-t border-slate-100">
+      <div className="mb-4 pt-3 border-t border-outline-variant/40">
         {showClearOptions ? (
           <div className="space-y-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
-            <label className="block text-xs font-bold uppercase tracking-wide text-amber-800">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-800">
               Set due amount before clear
             </label>
             <input
@@ -332,7 +342,7 @@ function OrderCard({
               value={pendingDueAmount}
               onChange={(e) => setPendingDueAmount(e.target.value)}
               disabled={isBusy}
-              className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-sm"
+              className="w-full h-10 px-3 rounded-lg border border-amber-300 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs font-mono"
               placeholder="Enter due amount"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -341,14 +351,14 @@ function OrderCard({
                   void handleClearPayment().catch(() => undefined);
                 }}
                 disabled={isBusy}
-                className="w-full min-h-11 bg-amber-500 hover:bg-amber-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
+                className="w-full h-10 bg-amber-500 hover:bg-amber-600 text-white py-1.5 rounded-lg font-bold text-xs transition-colors"
               >
                 Clear With Amount
               </button>
               <button
                 onClick={() => setShowClearOptions(false)}
                 disabled={isBusy}
-                className="w-full min-h-11 bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
+                className="w-full h-10 bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 py-1.5 rounded-lg font-bold text-xs transition-colors"
               >
                 Cancel
               </button>
@@ -357,7 +367,7 @@ function OrderCard({
         ) : (
           <button
             onClick={() => setShowClearOptions(true)}
-            className="w-full min-h-11 bg-amber-100 text-amber-800 hover:bg-amber-200 py-2.5 rounded-xl font-bold text-sm transition-colors"
+            className="w-full h-10 bg-surface-container text-slate-700 border border-outline-variant/50 hover:bg-surface-container-high py-2 rounded-xl font-bold text-xs transition-colors active:scale-[0.98]"
           >
             {isUnpaid ? 'Adjust Due Amount' : 'Clear / Adjust Payment'}
           </button>
@@ -365,18 +375,18 @@ function OrderCard({
       </div>
 
       {isPending && (
-        <div className="mb-4 pt-3 border-t border-slate-100 space-y-2">
+        <div className="mb-4 pt-3 border-t border-outline-variant/40 space-y-2">
           <button
             type="button"
             onClick={() => onRequestModifyOrder(order)}
             disabled={isBusy}
-            className="w-full min-h-11 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
+            className="w-full h-10 bg-surface-container-high text-primary hover:bg-surface-container-highest py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-60 active:scale-[0.98]"
           >
             Modify Order
           </button>
           {showCancelOptions ? (
             <div className="space-y-2 bg-rose-50 border border-rose-200 rounded-xl p-3">
-              <label className="block text-xs font-bold uppercase tracking-wide text-rose-700">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-rose-700">
                 Cancel Reason (Optional)
               </label>
               <textarea
@@ -384,7 +394,7 @@ function OrderCard({
                 onChange={(e) => setCancelReason(e.target.value)}
                 rows={2}
                 disabled={isBusy}
-                className="w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                className="w-full rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-500"
                 placeholder="Reason for cancellation"
               />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -394,7 +404,7 @@ function OrderCard({
                     void handleCancelOrder().catch(() => undefined);
                   }}
                   disabled={isBusy}
-                  className="w-full min-h-11 bg-rose-500 hover:bg-rose-600 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
+                  className="w-full h-10 bg-rose-500 hover:bg-rose-600 text-white py-1.5 rounded-lg font-bold text-xs transition-colors"
                 >
                   Confirm Cancel
                 </button>
@@ -402,7 +412,7 @@ function OrderCard({
                   type="button"
                   onClick={() => setShowCancelOptions(false)}
                   disabled={isBusy}
-                  className="w-full min-h-11 bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 py-2.5 rounded-lg font-bold text-sm transition-colors"
+                  className="w-full h-10 bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 py-1.5 rounded-lg font-bold text-xs transition-colors"
                 >
                   Keep Order
                 </button>
@@ -413,7 +423,7 @@ function OrderCard({
               type="button"
               onClick={() => setShowCancelOptions(true)}
               disabled={isBusy}
-              className="w-full min-h-11 bg-rose-100 text-rose-700 hover:bg-rose-200 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-60"
+              className="w-full h-10 bg-rose-50 text-rose-700 hover:bg-rose-100 py-2 rounded-xl font-bold text-xs transition-colors disabled:opacity-60 active:scale-[0.98]"
             >
               Cancel Order
             </button>
@@ -427,9 +437,9 @@ function OrderCard({
             void onUpdateStatus(order.id, 'completed').catch(() => undefined);
           }}
           disabled={isBusy}
-          className="w-full min-h-12 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98] shadow-sm"
+          className="w-full h-11 bg-secondary text-on-secondary rounded-xl font-bold flex items-center justify-center gap-1.5 transition-all scale-98 active:scale-95 duration-150 btn-checkout shadow-sm text-sm"
         >
-          <CheckCircle2 className="w-5 h-5" />
+          <CheckCircle2 className="w-4 h-4" />
           Mark as Done
         </button>
       ) : (
@@ -438,18 +448,18 @@ function OrderCard({
             void onUpdateStatus(order.id, 'pending').catch(() => undefined);
           }}
           disabled={isBusy}
-          className="w-full min-h-11 bg-slate-100 hover:bg-slate-200 text-slate-600 py-2.5 rounded-xl font-bold text-sm transition-colors"
+          className="w-full h-10 bg-surface-container text-slate-500 border border-outline-variant/40 hover:bg-surface-container-high py-2 rounded-xl font-bold text-xs transition-colors"
         >
           Undo (Move to Pending)
         </button>
       )}
       {hasError && (
         <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-          <p className="text-sm font-medium text-rose-700">{mutationState?.message}</p>
+          <p className="text-xs font-semibold text-rose-700">{mutationState?.message}</p>
           <button
             type="button"
             onClick={() => onRetryAction(order.id)}
-            className="mt-2 text-xs font-bold uppercase tracking-wide text-rose-700 hover:text-rose-800"
+            className="mt-2 text-[10px] font-bold uppercase tracking-wider text-rose-700 hover:underline"
           >
             Retry Last Action
           </button>
@@ -588,17 +598,17 @@ export function OrderQueue({
     <div className="mobile-bottom-offset md:pb-0">
       <div className="mb-4 flex items-center justify-between gap-2 flex-nowrap">
         <span
-          className={`inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border min-w-0 shrink ${ordersRealtimeConnected
-            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+          className={`inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border ${ordersRealtimeConnected
+            ? 'bg-secondary-container text-on-secondary-container border-transparent'
             : 'bg-amber-50 text-amber-700 border-amber-200'
             }`}
         >
           <span
-            className={`w-2 h-2 rounded-full shrink-0 ${ordersRealtimeConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+            className={`w-2 h-2 rounded-full shrink-0 ${ordersRealtimeConnected ? 'bg-secondary' : 'bg-amber-500 animate-pulse'
               }`}
           />
           <span className="truncate">
-            {ordersRealtimeConnected ? 'Live' : 'Reconnecting'}
+            {ordersRealtimeConnected ? 'Live Connection' : 'Reconnecting'}
           </span>
         </span>
         <div className="flex items-center gap-2 shrink-0">
@@ -608,23 +618,22 @@ export function OrderQueue({
             onClick={() => onToggleOrderAlerts(!orderAlertsEnabled)}
             aria-pressed={orderAlertsEnabled}
             title={orderAlertsEnabled ? 'Disable order alerts' : 'Enable order alerts'}
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors ${orderAlertsEnabled
-              ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-              : 'bg-slate-100 text-slate-600 border-slate-200'
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors duration-150 ${orderAlertsEnabled
+              ? 'bg-secondary-container text-on-secondary-container border-transparent'
+              : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
               }`}
           >
-            {/* Label hidden on very small screens */}
             <span className="hidden sm:inline">Order Alerts</span>
             <span
-              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+              className={`relative inline-flex h-4 w-7 rounded-full transition-colors ${orderAlertsEnabled ? 'bg-secondary' : 'bg-slate-300'
                 }`}
             >
               <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${orderAlertsEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${orderAlertsEnabled ? 'translate-x-3.5' : 'translate-x-0.5'
                   }`}
               />
             </span>
-            <span className="text-[10px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
+            <span className="text-[9px]">{orderAlertsEnabled ? 'On' : 'Off'}</span>
           </button>
 
           {/* Push notification toggle — only shown when the browser supports it */}
@@ -643,28 +652,27 @@ export function OrderQueue({
                   ? 'Disable mobile push notifications'
                   : 'Enable mobile push notifications'
               }
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${pushEnabled
-                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                : 'bg-slate-100 text-slate-600 border-slate-200'
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${pushEnabled
+                ? 'bg-secondary-container text-on-secondary-container border-transparent'
+                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                 }`}
             >
               {pushLoading ? (
                 <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                <Smartphone className="w-3 h-3 shrink-0" />
               )}
-              {/* Label hidden on very small screens to avoid wrapping */}
               <span className="hidden sm:inline">Push</span>
               <span
-                className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${pushEnabled ? 'bg-indigo-500' : 'bg-slate-300'
+                className={`relative inline-flex h-4 w-7 rounded-full transition-colors ${pushEnabled ? 'bg-secondary' : 'bg-slate-300'
                   }`}
               >
                 <span
-                  className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${pushEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${pushEnabled ? 'translate-x-3.5' : 'translate-x-0.5'
                     }`}
                 />
               </span>
-              <span className="text-[10px]">
+              <span className="text-[9px]">
                 {pushStatus === 'denied' ? 'Off' : pushEnabled ? 'On' : 'Off'}
               </span>
             </button>
@@ -672,36 +680,40 @@ export function OrderQueue({
         </div>
       </div>
       {ordersPermissionError && (
-        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+        <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
           {ordersPermissionError}
         </div>
       )}
 
-      <div className="md:hidden mb-4 bg-white border border-slate-200 rounded-xl p-1 grid grid-cols-3 gap-1">
+      {/* Chip filters carousel on mobile */}
+      <div className="md:hidden flex overflow-x-auto gap-2 mb-6 no-scrollbar pb-1">
         <button
           onClick={() => setMobileSection('pending')}
-          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'pending'
-            ? 'bg-orange-100 text-orange-700'
-            : 'text-slate-500'
-            }`}
+          className={`h-[36px] px-4 rounded-full font-label-md text-xs whitespace-nowrap active:scale-95 transition-transform font-bold border ${
+            mobileSection === 'pending'
+              ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+              : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low'
+          }`}
         >
           Preparing ({pendingOrders.length})
         </button>
         <button
           onClick={() => setMobileSection('payment-pending')}
-          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'payment-pending'
-            ? 'bg-amber-100 text-amber-700'
-            : 'text-slate-500'
-            }`}
+          className={`h-[36px] px-4 rounded-full font-label-md text-xs whitespace-nowrap active:scale-95 transition-transform font-bold border ${
+            mobileSection === 'payment-pending'
+              ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+              : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low'
+          }`}
         >
-          Payment ({paymentPendingOrders.length})
+          Payment Due ({paymentPendingOrders.length})
         </button>
         <button
           onClick={() => setMobileSection('completed')}
-          className={`min-h-11 rounded-lg text-sm font-bold transition-colors ${mobileSection === 'completed'
-            ? 'bg-emerald-100 text-emerald-700'
-            : 'text-slate-500'
-            }`}
+          className={`h-[36px] px-4 rounded-full font-label-md text-xs whitespace-nowrap active:scale-95 transition-transform font-bold border ${
+            mobileSection === 'completed'
+              ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+              : 'bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low'
+          }`}
         >
           Completed ({paidCompletedOrders.length})
         </button>

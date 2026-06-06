@@ -14,7 +14,7 @@ interface MenuManagerProps {
   onUpdatePricingRule: (next: Partial<PricingRule>) => Promise<void>;
 }
 
-const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain'];
+const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain', 'Stick'];
 
 const DEFAULT_CATEGORIES = ['Regular', 'Special Dish', 'Pyali'] as const;
 const CUSTOM_CATEGORIES_STORAGE_KEY = 'pos_custom_categories_v1';
@@ -47,6 +47,7 @@ const defaultForm = (): FormState => ({
     'Dry Fruit Only': 0,
     'Ice Cream + Dry Fruit': 0,
     'Plain': 0,
+    'Stick': 0,
   },
   defaultGolaVariant: 'Plain',
   variantMode: 'both',
@@ -97,6 +98,7 @@ function menuItemToForm(item: MenuItem): FormState {
       'Dry Fruit Only': 0,
       'Ice Cream + Dry Fruit': 0,
       'Plain': 0,
+      'Stick': 0,
     },
     defaultGolaVariant: item.defaultGolaVariant || 'Plain',
     variantMode: item.variantMode ?? 'both',
@@ -148,6 +150,11 @@ export function MenuManager({
   const [bulkError, setBulkError] = useState('');
 
   const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [mockAvailable, setMockAvailable] = useState<Record<string, boolean>>({});
+
+  const handleToggleAvailable = (itemId: string) => {
+    setMockAvailable((prev) => ({ ...prev, [itemId]: prev[itemId] === false }));
+  };
 
   useEffect(() => {
     try {
@@ -429,11 +436,11 @@ export function MenuManager({
   };
 
   return (
-    <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
+    <div className="mobile-bottom-offset md:pb-0 max-w-5xl mx-auto space-y-6">
+      <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Menu Management</h2>
-          <span className="text-[11px] font-bold uppercase tracking-wide bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full">
+          <h2 className="text-xl sm:text-2xl font-bold text-on-surface font-headline">Menu Management</h2>
+          <span className="text-[10px] font-bold uppercase tracking-wider bg-secondary-container text-on-secondary-container px-2.5 py-1 rounded-full border border-transparent">
             Live Service
           </span>
         </div>
@@ -441,9 +448,9 @@ export function MenuManager({
           <button
             type="button"
             onClick={() => setShowOrdersPanel((prev) => !prev)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors border ${showOrdersPanel
-              ? 'bg-slate-800 text-white border-slate-800'
-              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all scale-98 active:scale-95 border ${showOrdersPanel
+              ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+              : 'bg-surface-container-lowest text-on-surface-variant border-outline-variant hover:bg-surface-container-high'
               }`}
           >
             {showOrdersPanel ? 'Hide Orders' : 'Show Orders'}
@@ -451,9 +458,9 @@ export function MenuManager({
           <button
             onClick={handleToggleBulkEdit}
             disabled={savingBulk}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-colors ${isBulkEdit
-              ? 'bg-rose-100 text-rose-700 hover:bg-rose-200 border border-rose-200'
-              : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 border border-indigo-200'
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all scale-98 active:scale-95 border ${isBulkEdit
+              ? 'bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200'
+              : 'bg-secondary-container text-on-secondary-container hover:opacity-90 border-transparent shadow-sm'
               }`}
           >
             {isBulkEdit ? 'Cancel Bulk Edit' : 'Bulk Edit'}
@@ -462,15 +469,15 @@ export function MenuManager({
       </div>
 
       {showOrdersPanel && (
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+        <div className="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant mb-6">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
             <div>
-              <h3 className="text-base font-bold text-slate-800">Whole Order List</h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Whole Order List</h3>
+              <p className="text-xs text-on-surface-variant mt-1">
                 Search and filter all live orders without leaving menu management.
               </p>
             </div>
-            <span className="text-xs font-bold uppercase tracking-wide bg-slate-100 text-slate-600 px-3 py-1 rounded-full">
+            <span className="text-[10px] font-bold uppercase tracking-wider bg-surface-container text-on-surface px-3 py-1 rounded-full border border-outline-variant/30">
               {filteredOrders.length} order(s)
             </span>
           </div>
@@ -481,12 +488,12 @@ export function MenuManager({
               value={orderSearch}
               onChange={(e) => setOrderSearch(e.target.value)}
               placeholder="Search by order #, customer, or item"
-              className="xl:col-span-2 h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="xl:col-span-2 h-10 px-3 rounded-xl border border-outline-variant bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-secondary text-on-surface"
             />
             <select
               value={orderStatusFilter}
               onChange={(e) => setOrderStatusFilter(e.target.value as 'all' | Order['status'])}
-              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="h-10 px-3 rounded-xl border border-outline-variant bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-secondary text-on-surface"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -495,7 +502,7 @@ export function MenuManager({
             <select
               value={orderSourceFilter}
               onChange={(e) => setOrderSourceFilter(e.target.value as 'all' | 'pos' | 'customer')}
-              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="h-10 px-3 rounded-xl border border-outline-variant bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-secondary text-on-surface"
             >
               <option value="all">All Sources</option>
               <option value="pos">POS</option>
@@ -504,7 +511,7 @@ export function MenuManager({
             <select
               value={orderPaymentFilter}
               onChange={(e) => setOrderPaymentFilter(e.target.value as 'all' | Order['paymentStatus'])}
-              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+              className="h-10 px-3 rounded-xl border border-outline-variant bg-surface text-xs focus:outline-none focus:ring-2 focus:ring-secondary text-on-surface"
             >
               <option value="all">All Payment</option>
               <option value="paid">Paid</option>
@@ -512,40 +519,40 @@ export function MenuManager({
             </select>
           </div>
 
-          <div className="max-h-[520px] overflow-y-auto space-y-3 pr-1">
+          <div className="max-h-[500px] overflow-y-auto space-y-3 pr-1 no-scrollbar">
             {filteredOrders.length === 0 ? (
-              <div className="rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-slate-500">
+              <div className="rounded-xl border-2 border-dashed border-outline-variant bg-surface p-8 text-center text-xs text-on-surface-variant font-medium">
                 No orders match the selected filters.
               </div>
             ) : (
               filteredOrders.map((order) => (
-                <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+                <div key={order.id} className="rounded-xl border border-outline-variant bg-surface/30 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-lg font-bold text-slate-800">#{order.orderNumber}</span>
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${order.status === 'pending'
-                          ? 'bg-orange-100 text-orange-700'
-                          : 'bg-emerald-100 text-emerald-700'
+                        <span className="text-sm font-bold text-on-surface font-headline">#{order.orderNumber}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-transparent ${order.status === 'pending'
+                          ? 'bg-error-container text-on-error-container'
+                          : 'bg-secondary-container text-on-secondary-container'
                           }`}>
                           {order.status}
                         </span>
-                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full ${order.paymentStatus === 'paid'
-                          ? 'bg-indigo-100 text-indigo-700'
-                          : 'bg-rose-100 text-rose-700'
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-transparent ${order.paymentStatus === 'paid'
+                          ? 'bg-secondary-container text-on-secondary-container'
+                          : 'bg-error-container text-on-error-container'
                           }`}>
                           {order.paymentStatus}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full bg-slate-200 text-slate-600">
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-surface-variant text-on-surface-variant border border-outline-variant/40">
                           {(order.source ?? 'pos').toUpperCase()}
                         </span>
                       </div>
-                      <div className="mt-1 text-sm text-slate-700 font-semibold">{order.customerName}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{formatOrderTimestamp(order.timestamp)}</div>
+                      <div className="mt-1.5 text-xs text-on-surface font-bold">{order.customerName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono mt-0.5">{formatOrderTimestamp(order.timestamp)}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-lg font-bold text-slate-800">Rs {order.total}</div>
-                      <div className="text-xs text-slate-500">
+                      <div className="text-sm font-bold text-on-surface font-headline">₹{order.total}</div>
+                      <div className="text-[10px] text-slate-500 font-medium">
                         {order.items.reduce((sum, item) => sum + item.quantity, 0)} item(s)
                       </div>
                     </div>
@@ -555,18 +562,18 @@ export function MenuManager({
                     {order.items.map((item, index) => {
                       const variant = getOrderItemVariant(item as unknown as Record<string, unknown>);
                       return (
-                        <span key={`${order.id}-${index}`} className="inline-flex items-center gap-1 rounded-full bg-white border border-slate-200 px-2.5 py-1 text-xs text-slate-700">
-                          <span className="font-bold">{item.quantity}x</span>
-                          <span>{item.name}</span>
-                          {variant && <span className="font-bold text-indigo-700 uppercase">{variant}</span>}
+                        <span key={`${order.id}-${index}`} className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-lowest border border-outline-variant/60 px-2.5 py-1 text-xs text-on-surface">
+                          <span className="font-bold text-on-secondary-container bg-secondary-container px-1 py-0.2 rounded text-[10px] font-mono">{item.quantity}x</span>
+                          <span className="font-medium">{item.name}</span>
+                          {variant && <span className="font-bold text-secondary text-[10px] uppercase font-headline">| {variant}</span>}
                         </span>
                       );
                     })}
                   </div>
 
                   {order.orderInstructions && (
-                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                      <span className="font-bold uppercase tracking-wide text-[10px] mr-2">Instructions</span>
+                    <div className="mt-3 rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs text-on-surface whitespace-pre-line">
+                      <span className="font-bold uppercase tracking-wide text-[9px] text-slate-500 mr-2">Instructions:</span>
                       {order.orderInstructions}
                     </div>
                   )}
@@ -578,12 +585,12 @@ export function MenuManager({
       )}
 
       {isBulkEdit && Object.keys(bulkDrafts).length > 0 && (
-        <div className="sticky top-4 z-10 bg-white p-4 border border-slate-200 shadow-xl rounded-2xl flex flex-wrap gap-4 justify-between items-center mb-6">
+        <div className="sticky top-4 z-20 bg-surface-container-lowest p-4 border border-outline-variant shadow-xl rounded-2xl flex flex-wrap gap-4 justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg text-sm border border-indigo-100">
+            <span className="font-bold text-on-secondary-container bg-secondary-container px-3 py-1.5 rounded-lg text-xs border border-transparent shadow-sm font-headline">
               {Object.keys(bulkDrafts).length} item(s) changed
             </span>
-            {bulkError && <span className="text-sm text-rose-500 font-medium flex-1">{bulkError}</span>}
+            {bulkError && <span className="text-xs text-rose-600 font-semibold flex-1">{bulkError}</span>}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <button
@@ -594,17 +601,17 @@ export function MenuManager({
                 }
               }}
               disabled={savingBulk}
-              className="flex-1 sm:flex-none px-4 py-2 border border-slate-200 rounded-xl text-sm font-bold bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              className="flex-1 sm:flex-none h-10 px-4 border border-outline-variant rounded-xl text-xs font-bold bg-surface hover:bg-surface-container transition-colors text-on-surface scale-98 active:scale-95"
             >
               Discard
             </button>
             <button
               onClick={handleSaveBulk}
               disabled={savingBulk}
-              className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold py-2 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="flex-1 sm:flex-none bg-secondary hover:opacity-90 disabled:bg-outline-variant text-on-secondary font-bold h-10 px-6 rounded-xl transition-all scale-98 active:scale-95 flex items-center justify-center gap-2"
             >
               {savingBulk ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-on-secondary border-t-transparent rounded-full animate-spin" />
               ) : <Save className="w-4 h-4" />}
               Save All changes
             </button>
@@ -612,11 +619,12 @@ export function MenuManager({
         </div>
       )}
 
-      <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+      {/* Offers & Discount Panel */}
+      <div className="bg-surface-container-lowest p-5 rounded-xl shadow-sm border border-outline-variant space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h3 className="text-base font-bold text-slate-800">POC Offers (Admin)</h3>
-            <p className="text-sm text-slate-500 mt-1">
+            <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider font-headline">POC Offers (Admin)</h3>
+            <p className="text-xs text-on-surface-variant mt-1">
               Offers go live only after pressing Apply Offers.
             </p>
           </div>
@@ -629,9 +637,9 @@ export function MenuManager({
                   bogoEnabled: false,
                 }))
               }
-              className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${!pricingDraft.bogoEnabled
-                ? 'bg-slate-800 text-white border-slate-800'
-                : 'bg-slate-100 text-slate-600 border-slate-200'
+              className={`px-3 h-10 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-colors scale-98 active:scale-95 ${!pricingDraft.bogoEnabled
+                ? 'bg-secondary text-on-secondary border-transparent shadow-sm'
+                : 'bg-surface-container text-on-surface-variant border-outline-variant hover:bg-surface-container-high'
                 }`}
             >
               Offer Off
@@ -645,9 +653,9 @@ export function MenuManager({
                   bogoType: 'b1g1',
                 }))
               }
-              className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b1g1'
-                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                : 'bg-slate-100 text-slate-600 border-slate-200'
+              className={`px-3 h-10 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-colors scale-98 active:scale-95 ${pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b1g1'
+                ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm'
+                : 'bg-surface-container text-on-surface-variant border-outline-variant hover:bg-surface-container-high'
                 }`}
             >
               Buy 1 Get 1
@@ -661,9 +669,9 @@ export function MenuManager({
                   bogoType: 'b2g1',
                 }))
               }
-              className={`px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border transition-colors ${pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b2g1'
-                ? 'bg-indigo-100 text-indigo-800 border-indigo-300'
-                : 'bg-slate-100 text-slate-600 border-slate-200'
+              className={`px-3 h-10 rounded-xl text-[10px] font-bold uppercase tracking-wider border transition-colors scale-98 active:scale-95 ${pricingDraft.bogoEnabled && pricingDraft.bogoType === 'b2g1'
+                ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm'
+                : 'bg-surface-container text-on-surface-variant border-outline-variant hover:bg-surface-container-high'
                 }`}
             >
               Buy 2 Get 1
@@ -673,7 +681,7 @@ export function MenuManager({
             <button
               type="button"
               onClick={() => setPricingDraft({ discountPercent: 0, bogoEnabled: false, bogoType: 'b2g1' })}
-              className="px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+              className="px-3 h-10 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container transition-colors scale-98 active:scale-95"
             >
               Reset Offers
             </button>
@@ -681,18 +689,18 @@ export function MenuManager({
               type="button"
               disabled={!hasPricingChanges || savingOffers}
               onClick={() => { void handleApplyOffers(); }}
-              className="px-3 min-h-11 py-2 rounded-xl text-xs font-bold uppercase tracking-wide border border-indigo-600 bg-indigo-600 text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 h-10 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-transparent bg-secondary text-on-secondary hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed scale-98 active:scale-95 shadow-sm"
             >
               {savingOffers ? 'Applying...' : 'Apply Offers'}
             </button>
           </div>
         </div>
 
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700 mb-2">
+        <div className="pt-2">
+          <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">
             Whole Menu Discount (%)
           </label>
-          <div className="grid grid-cols-1 min-[360px]:grid-cols-[1fr_auto] gap-2">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-[1fr_auto] gap-3">
             <input
               type="number"
               min="0"
@@ -703,7 +711,7 @@ export function MenuManager({
                 const safeValue = Number.isFinite(next) ? Math.min(100, Math.max(0, Math.round(next))) : 0;
                 setPricingDraft((prev) => ({ ...prev, discountPercent: safeValue }));
               }}
-              className="h-11 px-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="h-10 px-3 rounded-xl border border-outline-variant bg-surface text-sm focus:outline-none focus:ring-2 focus:ring-secondary text-on-surface"
             />
             <div className="grid grid-cols-3 gap-2">
               {[5, 10, 15].map((pct) => (
@@ -711,39 +719,41 @@ export function MenuManager({
                   key={pct}
                   type="button"
                   onClick={() => setPricingDraft((prev) => ({ ...prev, discountPercent: pct }))}
-                  className="h-11 px-3 rounded-xl text-sm font-bold border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
+                  className="h-10 px-3 rounded-xl text-xs font-bold border border-outline-variant bg-surface-container hover:bg-surface-container-high transition-colors scale-98 active:scale-95 text-on-surface"
                 >
                   {pct}%
                 </button>
               ))}
             </div>
           </div>
-          <p className="text-xs text-slate-500 mt-2">
-            Live: {pricingRule.discountPercent}% off {pricingRule.bogoEnabled ? `+ ${pricingRule.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">
-            Draft: {pricingDraft.discountPercent}% off {pricingDraft.bogoEnabled ? `+ ${pricingDraft.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
-          </p>
+          <div className="flex justify-between flex-wrap gap-2 text-[10px] text-slate-500 mt-2 font-medium">
+            <p>
+              Live: <span className="font-bold text-secondary">{pricingRule.discountPercent}% off</span> {pricingRule.bogoEnabled ? `+ ${pricingRule.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
+            </p>
+            <p>
+              Draft: <span className="font-bold text-secondary">{pricingDraft.discountPercent}% off</span> {pricingDraft.bogoEnabled ? `+ ${pricingDraft.bogoType === 'b1g1' ? 'Buy 1 Get 1' : 'Buy 2 Get 1'} enabled` : ''}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Form */}
+      {/* Add / Edit Form */}
       {!isBulkEdit && (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-8">
-          <h3 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
-            {editingId ? <Edit2 className="w-5 h-5 text-indigo-500" /> : <Plus className="w-5 h-5 text-indigo-500" />}
+        <div className="bg-surface-container-lowest p-5 rounded-xl shadow-sm border border-outline-variant">
+          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-4 flex items-center gap-2">
+            {editingId ? <Edit2 className="w-4.5 h-4.5 text-secondary" /> : <Plus className="w-4.5 h-4.5 text-secondary" />}
             {editingId ? 'Edit Menu Item' : 'Add New Item'}
           </h3>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Item Name</label>
+              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">Item Name</label>
               <input
                 type="text"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full h-10 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
                 placeholder="e.g. Kala Khatta"
                 required
               />
@@ -751,7 +761,7 @@ export function MenuManager({
 
             {/* Category */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Category</label>
+              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-2">Category</label>
               <div className="flex gap-2 flex-wrap">
                 {allCategories.map((cat) => (
                   <button
@@ -766,9 +776,9 @@ export function MenuManager({
                         return { ...prev, category: cat };
                       })
                     }
-                    className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${form.category === cat
-                      ? 'bg-indigo-100 text-indigo-800 border-indigo-500'
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all scale-98 active:scale-95 ${form.category === cat
+                      ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm'
+                      : 'bg-surface text-on-surface-variant border-outline-variant hover:bg-surface-container'
                       }`}
                   >
                     {CATEGORY_ICONS[cat] ?? '\u{1F361}'} {cat}
@@ -777,30 +787,29 @@ export function MenuManager({
                 <button
                   type="button"
                   onClick={handleAddNewCategory}
-                  className="px-4 py-2 rounded-xl text-sm font-bold border-2 border-dashed border-slate-300 text-slate-500 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-400 transition-colors flex items-center gap-1"
+                  className="px-4 py-2 rounded-xl text-xs font-bold border border-dashed border-outline-variant text-on-surface-variant hover:bg-surface-container transition-colors flex items-center gap-1 scale-98 active:scale-95"
                 >
-                  <Plus className="w-4 h-4" /> Add New
+                  <Plus className="w-3.5 h-3.5" /> Add New
                 </button>
               </div>
             </div>
 
-            {/* Prices — all in one section */}
+            {/* Prices section */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Prices{' '}
-                <span className="text-slate-400 font-normal">(fill at least one)</span>
+              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1.5">
+                Prices <span className="text-slate-400 font-normal normal-case">(fill at least one)</span>
               </label>
 
-              <div className="border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="border border-outline-variant rounded-xl overflow-hidden bg-surface/25">
                 {/* Stick / Dish row */}
-                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+                <div className="bg-surface-container px-4 py-2 border-b border-outline-variant flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-base">🍡</span>
-                    <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                      {stickAllowed ? 'Stick / Dish' : 'Dish Only'}
+                    <span className="text-sm">🍡</span>
+                    <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider font-headline">
+                      {stickAllowed ? 'Stick / Dish Option' : 'Dish Only'}
                     </span>
                   </div>
-                  {/* Variant mode — only meaningful when stick is allowed and no Gola prices */}
+                  {/* Variant mode selector */}
                   {stickAllowed && !hasGolaPrices && (
                     <div className="flex items-center gap-1">
                       {(
@@ -814,10 +823,10 @@ export function MenuManager({
                           key={value}
                           type="button"
                           onClick={() => setForm((f) => ({ ...f, variantMode: value }))}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                             form.variantMode === value
-                              ? 'bg-indigo-100 text-indigo-800 border-indigo-400'
-                              : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                              ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm'
+                              : 'bg-surface text-on-surface-variant border-outline-variant hover:bg-surface-container'
                           }`}
                         >
                           {label}
@@ -826,31 +835,31 @@ export function MenuManager({
                     </div>
                   )}
                 </div>
-                <div className={`grid gap-px bg-slate-200 ${stickAllowed && form.variantMode !== 'dish_only' ? 'grid-cols-1 min-[375px]:grid-cols-2' : 'grid-cols-1'}`}>
+                <div className={`grid gap-px bg-outline-variant/40 ${stickAllowed && form.variantMode !== 'dish_only' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                   {stickAllowed && form.variantMode !== 'dish_only' && (
-                    <div className="bg-white p-4">
-                      <label className="block text-xs font-bold text-slate-500 mb-1">Stick Price (₹)</label>
+                    <div className="bg-surface-container-lowest p-4">
+                      <label className="block text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider mb-1">Stick Price (₹)</label>
                       <input
                         type="number"
                         value={form.stickPrice || ''}
                         onChange={(e) => setForm({ ...form, stickPrice: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                        className="w-full h-10 px-3 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
                         min="0"
                         placeholder="₹0"
                       />
                     </div>
                   )}
                   {form.variantMode !== 'stick_only' && (
-                    <div className={`bg-white p-4 transition-opacity ${hasGolaPrices ? 'opacity-30 pointer-events-none' : ''}`}>
-                      <label className="block text-xs font-bold text-slate-500 mb-1">
-                        Dish Price (₹) {hasGolaPrices && <span className="text-[10px] text-rose-500 ml-1 font-normal">(Hidden by Gola Variants)</span>}
+                    <div className={`bg-surface-container-lowest p-4 transition-opacity ${hasGolaPrices ? 'opacity-30 pointer-events-none' : ''}`}>
+                      <label className="block text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                        Dish Price (₹) {hasGolaPrices && <span className="text-[9px] text-rose-600 ml-1 font-normal normal-case">(Overridden by Gola Variants)</span>}
                       </label>
                       <input
                         type="number"
                         value={form.dishPrice || ''}
                         disabled={hasGolaPrices}
                         onChange={(e) => setForm({ ...form, dishPrice: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-slate-50 disabled:text-slate-400"
+                        className="w-full h-10 px-3 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface disabled:bg-surface-container disabled:text-outline"
                         min="0"
                         placeholder="₹0"
                       />
@@ -859,24 +868,24 @@ export function MenuManager({
                 </div>
 
                 {/* Gola variants */}
-                <div className={`transition-opacity ${hasDishPrice ? 'opacity-30 pointer-events-none bg-slate-100' : ''}`}>
-                  <div className="bg-slate-50 px-4 py-2 border-y border-slate-200 flex items-center justify-between gap-2">
+                <div className={`transition-opacity ${hasDishPrice ? 'opacity-30 pointer-events-none bg-surface-container/20' : ''}`}>
+                  <div className="bg-surface-container px-4 py-2 border-y border-outline-variant flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-base">🧊</span>
-                      <span className="text-sm font-bold text-slate-600 uppercase tracking-wide">Dish Gola Variants</span>
+                      <span className="text-sm">🧊</span>
+                      <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider font-headline">Dish Gola Variants</span>
                     </div>
-                    {hasDishPrice && <span className="text-[10px] text-rose-500 font-bold uppercase tracking-wider">Clear "Dish Price" to use variants</span>}
+                    {hasDishPrice && <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider">Clear "Dish Price" to edit variants</span>}
                   </div>
-                  <div className="grid grid-cols-1 min-[375px]:grid-cols-2 gap-px bg-slate-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-outline-variant/40">
                     {GOLA_VARIANTS.map((v) => (
-                      <div key={v} className="bg-white p-4">
-                        <label className="block text-xs font-bold text-slate-500 mb-1">{v}</label>
+                      <div key={v} className="bg-surface-container-lowest p-4">
+                        <label className="block text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider mb-1">{v} (₹)</label>
                         <input
                           type="number"
                           value={form.golaVariantPrices[v] || ''}
                           disabled={hasDishPrice}
                           onChange={(e) => setGola(v, parseFloat(e.target.value) || 0)}
-                          className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:bg-transparent disabled:text-slate-400"
+                          className="w-full h-10 px-3 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface disabled:bg-surface-container/20 disabled:text-outline"
                           min="0"
                           placeholder="₹0"
                         />
@@ -884,14 +893,14 @@ export function MenuManager({
                     ))}
                   </div>
                   {hasGolaPrices && (
-                    <div className="bg-white px-4 py-3 border-t border-slate-200">
-                      <label className="block text-xs font-bold text-slate-500 mb-1">
-                        Default Variant <span className="text-slate-400 font-normal">(Shown as default when selecting Dish)</span>
+                    <div className="bg-surface-container-lowest px-4 py-3 border-t border-outline-variant">
+                      <label className="block text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider mb-1">
+                        Default Variant <span className="text-slate-400 font-normal normal-case">(Shown as default when selecting Dish)</span>
                       </label>
                       <select
                         value={form.defaultGolaVariant}
                         onChange={(e) => setForm({ ...form, defaultGolaVariant: e.target.value as GolaVariant })}
-                        className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm bg-white"
+                        className="w-full h-10 px-3 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
                       >
                         {GOLA_VARIANTS.map((v) => (
                           <option key={v} value={v}>
@@ -905,30 +914,30 @@ export function MenuManager({
               </div>
 
               {!atLeastOnePrice && saveError && (
-                <p className="flex items-center gap-1.5 text-rose-500 text-sm mt-2 font-medium">
-                  <AlertCircle className="w-4 h-4" />
+                <p className="flex items-center gap-1.5 text-rose-600 text-xs mt-2 font-semibold">
+                  <AlertCircle className="w-3.5 h-3.5" />
                   {saveError}
                 </p>
               )}
             </div>
 
             {saveError && atLeastOnePrice && (
-              <p className="flex items-center gap-1.5 text-rose-500 text-sm font-medium">
-                <AlertCircle className="w-4 h-4" />
+              <p className="flex items-center gap-1.5 text-rose-600 text-xs font-semibold">
+                <AlertCircle className="w-3.5 h-3.5" />
                 {saveError}
               </p>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 min-h-11 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 touch-manipulation"
+                className="flex-1 h-11 bg-secondary text-on-secondary font-bold rounded-xl transition-all scale-98 active:scale-95 hover:opacity-90 flex items-center justify-center gap-2 shadow-sm text-sm"
               >
                 {saving ? (
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-on-secondary border-t-transparent rounded-full animate-spin" />
                 ) : (
-                  <Save className="w-5 h-5" />
+                  <Save className="w-4 h-4" />
                 )}
                 {saving ? 'Saving…' : editingId ? 'Update Item' : 'Save Item'}
               </button>
@@ -936,7 +945,7 @@ export function MenuManager({
                 <button
                   type="button"
                   onClick={handleCancel}
-                  className="px-6 min-h-11 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors touch-manipulation"
+                  className="px-6 h-11 bg-surface-container hover:bg-surface-container-high text-on-surface font-bold rounded-xl transition-colors scale-98 active:scale-95 text-sm"
                 >
                   Cancel
                 </button>
@@ -946,18 +955,18 @@ export function MenuManager({
         </div>
       )}
 
-      {/* List */}
-      <div className="space-y-8">
+      {/* Categories & Items List */}
+      <div className="space-y-6">
         {allCategories.map((category) => {
           const items = menuItems.filter((item) => item.category === category);
           return (
-            <div key={category} className={`bg-white rounded-2xl shadow-sm border ${items.length === 0 ? 'border-dashed border-slate-300 opacity-70' : 'border-slate-100'} overflow-hidden`}>
-              <div className="bg-slate-50 px-6 py-3 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
+            <div key={category} className={`bg-surface-container-lowest rounded-xl shadow-sm border ${items.length === 0 ? 'border-dashed border-outline-variant/60 opacity-70' : 'border-outline-variant'} overflow-hidden`}>
+              <div className="bg-surface-container px-4 py-3 border-b border-outline-variant flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-slate-400" />
-                  <h3 className="font-bold text-slate-700 uppercase tracking-wider text-sm flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-secondary" />
+                  <h3 className="font-bold text-on-surface font-headline uppercase tracking-wider text-xs flex items-center gap-2">
                     {CATEGORY_ICONS[category] ?? '\u{1F361}'} {category}
-                    {items.length === 0 && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">EMPTY</span>}
+                    {items.length === 0 && <span className="text-[9px] bg-outline-variant text-on-surface-variant px-2 py-0.5 rounded-full font-bold font-mono">EMPTY</span>}
                   </h3>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
@@ -965,7 +974,7 @@ export function MenuManager({
                     type="button"
                     onClick={() => { void handleRenameCategory(category); }}
                     disabled={isBulkEdit || renamingCategory !== null}
-                    className="border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="border border-outline-variant rounded-lg px-3 py-1.5 text-xs font-bold bg-surface text-on-surface-variant hover:bg-surface-container disabled:opacity-50 disabled:cursor-not-allowed scale-98 active:scale-95 transition-all"
                   >
                     {renamingCategory === category ? 'Renaming...' : 'Rename Category'}
                   </button>
@@ -973,14 +982,14 @@ export function MenuManager({
                     <button
                       type="button"
                       onClick={() => handleDeleteCategory(category)}
-                      className="border border-rose-200 text-rose-600 rounded-lg px-3 py-1.5 text-xs font-medium bg-white hover:bg-rose-50 transition-colors flex items-center gap-1"
+                      className="border border-rose-200 text-rose-600 rounded-lg px-3 py-1.5 text-xs font-bold bg-surface hover:bg-rose-50 transition-colors flex items-center gap-1 scale-98 active:scale-95"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Delete Empty Category
                     </button>
                   )}
                   {category === 'Regular' && (
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Set Default Variant:</span>
+                      <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Variant:</span>
                       <select
                         value=""
                         onChange={async (e) => {
@@ -1014,7 +1023,7 @@ export function MenuManager({
                             alert(err instanceof Error ? err.message : 'Failed to save some items');
                           }
                         }}
-                        className="border border-slate-200 rounded-lg px-2 py-1 focus:ring-1 focus:ring-indigo-500 outline-none text-xs font-medium text-slate-700 bg-white"
+                        className="border border-outline-variant rounded-lg px-2 py-1 focus:ring-1 focus:ring-secondary outline-none text-xs font-bold text-on-surface bg-surface"
                       >
                         <option value="" disabled>-- Select Variant --</option>
                         {GOLA_VARIANTS.map((v) => (
@@ -1028,69 +1037,73 @@ export function MenuManager({
                 </div>
               </div>
               {items.length === 0 ? (
-                <div className="px-6 py-8 text-center text-slate-400 text-sm">
-                  No items in this category yet. Add a menu item above and select this category.
+                <div className="px-6 py-8 text-center text-slate-400 text-xs font-medium">
+                  No items in this category yet. Add a menu item above.
                 </div>
               ) : (
-              <div className="divide-y divide-slate-100">
+              <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-surface/20">
                 {items.map((item) => {
                   const draftForm = bulkDrafts[item.id];
                   const isEdited = !!draftForm;
                   const form = draftForm ? (draftForm as FormState) : menuItemToForm(item);
                   const stickAllowed = !isStickRestrictedCategory(form.category);
                   const hasGolaPrices = GOLA_VARIANTS.some((v) => form.golaVariantPrices && form.golaVariantPrices[v] > 0);
+                  const isAvailable = mockAvailable[item.id] !== false;
 
                   if (isBulkEdit) {
                     return (
                       <div
                         key={item.id}
-                        className={`p-4 sm:px-6 flex flex-col gap-3 transition-colors ${isEdited ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'
-                          }`}
+                        className={`p-4 rounded-xl border flex flex-col gap-3 transition-colors ${
+                          isEdited
+                            ? 'bg-secondary-container/10 border-secondary'
+                            : 'bg-surface-container-lowest border-outline-variant hover:border-outline'
+                        }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="font-bold text-slate-800 text-sm">{item.name}</div>
+                          <div className="font-bold text-on-surface text-xs font-headline">{item.name}</div>
                           {isEdited && (
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded">
-                              Edited
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-on-secondary-container bg-secondary-container px-2 py-0.5 rounded shadow-sm">
+                              Changed
                             </span>
                           )}
                         </div>
-                        <div className="grid grid-cols-2 min-[480px]:grid-cols-4 lg:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-2 gap-2 text-xs">
                           {stickAllowed && (
                             <div>
-                              <label className="block text-[10px] font-bold text-slate-500 mb-1">Stick ₹</label>
+                              <label className="block text-[9px] font-mono font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Stick (₹)</label>
                               <input
                                 type="number"
                                 min="0"
                                 value={form.stickPrice || ''}
                                 onChange={(e) => updateBulkDraft(item.id, 'stickPrice', parseFloat(e.target.value) || 0)}
-                                className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full h-8 px-2 border border-outline-variant bg-surface rounded-lg text-xs focus:ring-1 focus:ring-secondary text-on-surface"
                               />
                             </div>
                           )}
                           <div className={hasGolaPrices ? 'opacity-50' : ''}>
-                            <label className="block text-[10px] font-bold text-slate-500 mb-1">Dish ₹</label>
+                            <label className="block text-[9px] font-mono font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Dish (₹)</label>
                             <input
                               type="number"
                               min="0"
                               disabled={hasGolaPrices}
                               value={form.dishPrice || ''}
                               onChange={(e) => updateBulkDraft(item.id, 'dishPrice', parseFloat(e.target.value) || 0)}
-                              className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50 bg-white"
+                              className="w-full h-8 px-2 border border-outline-variant bg-surface rounded-lg text-xs focus:ring-1 focus:ring-secondary disabled:bg-surface-container text-on-surface"
                             />
                           </div>
                           {item.hasGolaVariants && form.golaVariantPrices &&
                             GOLA_VARIANTS.map((v) => (
-                              <div key={v}>
-                                <label className="block text-[10px] font-bold text-slate-500 mb-1 truncate" title={v}>
-                                  {v} ₹
+                              <div key={v} className="col-span-2">
+                                <label className="block text-[9px] font-mono font-bold text-on-surface-variant mb-1 uppercase tracking-wider truncate" title={v}>
+                                  {v} (₹)
                                 </label>
                                 <input
                                   type="number"
                                   min="0"
                                   value={form.golaVariantPrices![v] || ''}
                                   onChange={(e) => updateBulkGolaDraft(item.id, v, parseFloat(e.target.value) || 0)}
-                                  className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-indigo-500 bg-white"
+                                  className="w-full h-8 px-2 border border-outline-variant bg-surface rounded-lg text-xs focus:ring-1 focus:ring-secondary text-on-surface"
                                 />
                               </div>
                             ))}
@@ -1102,46 +1115,75 @@ export function MenuManager({
                   return (
                     <div
                       key={item.id}
-                      className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+                      className={`bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex items-center justify-between gap-4 transition-all duration-150 hover:scale-[1.01] ${
+                        isAvailable ? 'opacity-100' : 'opacity-60 bg-surface/10'
+                      }`}
                     >
-                      <div>
-                        <div className="font-bold text-slate-800">{item.name}</div>
-                        <div className="text-sm text-slate-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-on-surface font-headline text-sm truncate">{item.name}</h3>
+                          {!isAvailable && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-on-error-container bg-error-container px-2 py-0.5 rounded">
+                              OOS
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-2 flex flex-wrap gap-x-2.5 gap-y-1 font-medium">
                           {item.hasVariants && (
                             <>
-                              {!isStickRestrictedCategory(item.category) && item.price > 0 && <span>🍡 Stick: ₹{item.price}</span>}
+                              {!isStickRestrictedCategory(item.category) && item.price > 0 && (
+                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🍡 Stick: ₹{item.price}</span>
+                              )}
                               {((item.dishPrice && item.dishPrice > 0) || isStickRestrictedCategory(item.category)) && (
-                                <span>🥣 Dish: ₹{item.dishPrice && item.dishPrice > 0 ? item.dishPrice : item.price}</span>
+                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🥣 Dish: ₹{item.dishPrice && item.dishPrice > 0 ? item.dishPrice : item.price}</span>
                               )}
                             </>
                           )}
                           {item.hasGolaVariants && item.golaVariantPrices &&
                             GOLA_VARIANTS.filter((v) => item.golaVariantPrices![v] > 0).map((v) => (
-                              <span key={v}>🧊 {v}: ₹{item.golaVariantPrices![v]}</span>
+                              <span key={v} className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🧊 {v}: ₹{item.golaVariantPrices![v]}</span>
                             ))
                           }
                           {!item.hasVariants && !item.hasGolaVariants && (
-                            <span>₹{item.price}</span>
+                            <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">₹{item.price}</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Delete "${item.name}" permanently? This menu item will be removed from live ordering.`)) onDelete(item.id);
-                          }}
-                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+                      <div className="flex items-center gap-3.5 shrink-0">
+                        {/* Styled Availability Toggle Switch */}
+                        <div className="relative inline-block w-[50px] align-middle select-none">
+                          <input
+                            type="checkbox"
+                            checked={isAvailable}
+                            onChange={() => handleToggleAvailable(item.id)}
+                            className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 border-outline-variant appearance-none cursor-pointer z-10 opacity-0"
+                            id={`toggle-${item.id}`}
+                          />
+                          <label
+                            className="toggle-label block overflow-hidden h-7 rounded-full bg-outline-variant cursor-pointer"
+                            htmlFor={`toggle-${item.id}`}
+                          ></label>
+                        </div>
+
+                        {/* Actions group */}
+                        <div className="flex items-center gap-1 border-l border-outline-variant/50 pl-2">
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="p-1.5 text-secondary hover:bg-secondary-container/20 rounded-lg transition-colors scale-98 active:scale-95"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Delete "${item.name}" permanently?`)) onDelete(item.id);
+                            }}
+                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors scale-98 active:scale-95"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

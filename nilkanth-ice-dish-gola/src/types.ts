@@ -1,4 +1,4 @@
-export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain';
+export type GolaVariant = 'Ice Cream Only' | 'Dry Fruit Only' | 'Ice Cream + Dry Fruit' | 'Plain' | 'Stick';
 export type VariantMode = 'both' | 'stick_only' | 'dish_only';
 
 export interface MenuItem {

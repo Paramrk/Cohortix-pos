@@ -1,0 +1,299 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>QuickServe POS - New Order</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed-variant": "#005236",
+                    "on-primary-fixed": "#131b2e",
+                    "error": "#ba1a1a",
+                    "surface-dim": "#cbdbf5",
+                    "surface-container-high": "#dce9ff",
+                    "surface-container-low": "#eff4ff",
+                    "surface-tint": "#565e74",
+                    "outline": "#76777d",
+                    "surface-container": "#e5eeff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#783200",
+                    "on-primary-fixed-variant": "#3f465c",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-error": "#ffffff",
+                    "secondary-fixed-dim": "#4edea3",
+                    "on-secondary-fixed": "#002113",
+                    "tertiary-fixed": "#ffdbca",
+                    "on-background": "#0b1c30",
+                    "inverse-primary": "#bec6e0",
+                    "primary-fixed": "#dae2fd",
+                    "primary-container": "#131b2e",
+                    "inverse-surface": "#213145",
+                    "surface": "#f8f9ff",
+                    "secondary-fixed": "#6ffbbe",
+                    "surface-container-highest": "#d3e4fe",
+                    "secondary-container": "#6cf8bb",
+                    "primary": "#000000",
+                    "on-tertiary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "on-tertiary-fixed": "#341100",
+                    "on-tertiary-container": "#d95f00",
+                    "tertiary-container": "#341100",
+                    "tertiary": "#000000",
+                    "on-secondary-container": "#00714d",
+                    "surface-variant": "#d3e4fe",
+                    "secondary": "#006c49",
+                    "primary-fixed-dim": "#bec6e0",
+                    "background": "#f8f9ff",
+                    "surface-bright": "#f8f9ff",
+                    "on-surface-variant": "#45464d",
+                    "on-surface": "#0b1c30",
+                    "on-error-container": "#93000a",
+                    "on-primary-container": "#7c839b",
+                    "tertiary-fixed-dim": "#ffb690",
+                    "outline-variant": "#c6c6cd"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "xs": "4px",
+                    "base": "4px",
+                    "touch-target-min": "44px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "sm": "8px",
+                    "margin-mobile": "16px",
+                    "gutter": "12px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Manrope"],
+                    "label-md": ["JetBrains Mono"],
+                    "display-lg": ["Manrope"],
+                    "body-lg": ["Hanken Grotesk"],
+                    "headline-lg-mobile": ["Manrope"],
+                    "headline-sm": ["Manrope"],
+                    "price-display": ["Manrope"],
+                    "body-md": ["Hanken Grotesk"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "30px", "fontWeight": "700"}],
+                    "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "price-display": ["28px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        /* Hide scrollbar for category row */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        
+        /* Subtle texture for the main background to prevent flat wash-out */
+        body {
+            background-image: radial-gradient(#d3e4fe 1px, transparent 0);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-surface-dim font-body-md text-on-surface antialiased min-h-screen selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="bg-surface border-b border-outline-variant flex justify-between items-center px-margin-mobile h-touch-target-min w-full docked full-width top-0 sticky z-40">
+<!-- Leading Avatar -->
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-highest border border-outline-variant flex-shrink-0">
+<img alt="Store Manager" class="w-full h-full object-cover" data-alt="A professional, brightly lit headshot of a young retail manager looking confident. The image has a clean, high-key lighting setup typical of modern SaaS avatars, with a crisp, neutral background that fits seamlessly into a sophisticated, light-mode POS interface. Color palette is balanced and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1eIqykMkYNMZ3zb72nS1rvuExa0MfrKkijJCFCEs_ZJwqLtcks8VEa8lOWYCGTg05jJgzXeY6zssyKsksibeZ9hJDzirFIcKgGeF1WtxWuRWxHv6_g0E2eaLmTjl3LfbyBDis3IwCQaOIL9y8AX407B24e5idovoZ4T13jbBAtwdDRho3Yub_fx4UYQ24BAQdZmMzAMoJY6lN42xbxeMl-L-3AqPZSI0lxfht3GEJqRIUMHEernOn0FKMsal_d7t083TH5r2HuPcM">
+</div>
+<!-- Headline -->
+<h1 class="font-headline-md text-headline-md font-bold text-primary truncate px-4 text-center w-full">QuickServe POS</h1>
+<!-- Trailing Icon -->
+<button class="text-primary hover:bg-surface-container-high transition-colors scale-98 transition-transform duration-200 h-10 w-10 flex items-center justify-center rounded-full flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-primary-container">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+</button>
+</header>
+<!-- Category Filter Row -->
+<div class="sticky top-[44px] z-30 bg-surface/90 backdrop-blur-md border-b border-outline-variant/50 w-full overflow-x-auto no-scrollbar py-sm px-margin-mobile">
+<div class="flex gap-sm w-max items-center h-full">
+<button class="bg-primary-container text-on-primary-container px-4 py-2 rounded-full font-label-md text-label-md whitespace-nowrap active:scale-95 transition-all duration-150 shadow-sm border border-transparent">
+                All Items
+            </button>
+<button class="bg-surface-container text-on-surface px-4 py-2 rounded-full font-label-md text-label-md whitespace-nowrap hover:bg-surface-container-highest active:scale-95 transition-all duration-150 border border-outline-variant">
+                Coffee
+            </button>
+<button class="bg-surface-container text-on-surface px-4 py-2 rounded-full font-label-md text-label-md whitespace-nowrap hover:bg-surface-container-highest active:scale-95 transition-all duration-150 border border-outline-variant">
+                Pastry
+            </button>
+<button class="bg-surface-container text-on-surface px-4 py-2 rounded-full font-label-md text-label-md whitespace-nowrap hover:bg-surface-container-highest active:scale-95 transition-all duration-150 border border-outline-variant">
+                Cold Brew
+            </button>
+<button class="bg-surface-container text-on-surface px-4 py-2 rounded-full font-label-md text-label-md whitespace-nowrap hover:bg-surface-container-highest active:scale-95 transition-all duration-150 border border-outline-variant">
+                Hot Tea
+            </button>
+</div>
+</div>
+<!-- Main Content: Product Grid -->
+<main class="p-margin-mobile pb-[160px] pt-md">
+<div class="grid grid-cols-2 gap-gutter">
+<!-- Product Tile 1 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden active:scale-98 transition-transform duration-150 flex flex-col relative group">
+<div class="aspect-square w-full bg-surface-container-highest relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A top-down, high-quality photograph of a perfectly poured artisan latte in a pristine white ceramic cup. It rests on a clean, light-grey minimal surface. The image exhibits a bright, modern aesthetic with high-key lighting, minimizing harsh shadows to fit a clean POS interface. Warm coffee tones contrast with stark whites." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDl1XFp5CbpBNepE4aiUw3ZkgqCUgEtn891-1YeIj8beYUqbCoARXgghUN39k_gfD_7lj3bOo7xWWROhQuuakHoW5b1YPfFyxyyJOV8U4jQropxvOZp1_BbOITlL0HG5OfgdMQbPrt8bAjDKnhIyM1ZSUz7GuNxY8H54rZtxjw1AkLe5vxRXC5iwg9TywXu1SE9b_GhoIG9FhABqbwAwnxuvWPH9Lvh2YxTs9I5thss2JgQW4DxCOb8ahI6NYRBjRvrNl2Cb-eNq_3u">
+<!-- Stock Badge -->
+<div class="absolute top-2 left-2 w-3 h-3 rounded-full bg-secondary shadow-sm ring-2 ring-surface-container-lowest"></div>
+</div>
+<div class="p-3 flex flex-col flex-1 justify-between gap-1">
+<h2 class="font-body-md text-body-md text-on-surface line-clamp-2 leading-tight">Artisan Vanilla Latte</h2>
+<div class="flex justify-between items-end mt-1">
+<span class="font-price-display text-price-display text-primary tracking-tight">$4.50</span>
+<button class="w-9 h-9 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors border border-outline-variant shadow-sm focus:outline-none">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Product Tile 2 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden active:scale-98 transition-transform duration-150 flex flex-col relative group">
+<div class="aspect-square w-full bg-surface-container-highest relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A striking close-up of a flaky, golden-brown butter croissant resting on a textured white plate. The setting is minimal and well-lit with soft, diffused daylight creating a clean, appetizing SaaS-modern aesthetic. The bakery item is the clear focal point against a light, neutral background, perfect for quick visual recognition in a retail app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAmxNoWT656kxQWDAkspyT22Kf4dU2DtD4UHg2bRwV1Iw4TWQMsP4Z-BhzHRDaeDNVeWOxJvto_MEoJpVDJb_arT26lTc1wzeUMFXJD5NVdP1Wqz4dRJIc68prCalYSUZARHndpoEWl7WMQ7RNS7sx8O8JiZfZWjp4RgYgxVW9tObQOvk_LY3-lqzMqIEut_ftVfJMEY6FvJ1r_cN6O4GfO9KhaIiZEzbeQNS7Znv8y38wit11GoZVVu_qdZogdO_heCHDSVd4E91j9">
+</div>
+<div class="p-3 flex flex-col flex-1 justify-between gap-1">
+<h2 class="font-body-md text-body-md text-on-surface line-clamp-2 leading-tight">Butter Croissant</h2>
+<div class="flex justify-between items-end mt-1">
+<span class="font-price-display text-price-display text-primary tracking-tight">$3.75</span>
+<button class="w-9 h-9 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors border border-outline-variant shadow-sm focus:outline-none">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Product Tile 3 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden active:scale-98 transition-transform duration-150 flex flex-col relative group">
+<div class="aspect-square w-full bg-surface-container-highest relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A sleek, condensation-covered glass of nitro cold brew coffee with a rich, cascading creamy head. It sits on a pristine white marble counter under bright, clinical yet inviting lighting. The visual style is crisp, high-contrast, and modern, engineered for a fast-paced point-of-sale system emphasizing clarity and appetite appeal." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhFKXq_jk9fMFyPjLSDyYAA9srWGCjAU75Zuz8AMSAJqT6EPIahzGtpe4_v0VoJFp-JvGiU1IkCSyEdJ-QTl2I8aM9AmIxF-vCPgXtoxN6kKuCVxfcw9sJXi3VqTUeZ3w2loBsuMEhn5kH3v1Xgs4dk_NqZ2BKAOHoTS1f9yvqGeBuFwV91_z1VLV_kDNmMNbKZvJk6KPYN68kSEth3jMKPrMyR5sDGsgXp4Xc3_K3Ve1l8H42ytVefmZCLT3p2as_CtPDzFdcqlEh">
+</div>
+<div class="p-3 flex flex-col flex-1 justify-between gap-1">
+<h2 class="font-body-md text-body-md text-on-surface line-clamp-2 leading-tight">Nitro Cold Brew</h2>
+<div class="flex justify-between items-end mt-1">
+<span class="font-price-display text-price-display text-primary tracking-tight">$5.25</span>
+<!-- Item already in cart state (conceptual) -->
+<div class="flex items-center gap-2 bg-surface-container rounded-full px-1 py-1 border border-outline-variant">
+<button class="w-7 h-7 rounded-full text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[16px]">remove</span>
+</button>
+<span class="font-label-md text-label-md text-primary w-2 text-center">1</span>
+<button class="w-7 h-7 rounded-full text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest">
+<span class="material-symbols-outlined text-[16px]">add</span>
+</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Product Tile 4 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden active:scale-98 transition-transform duration-150 flex flex-col relative group">
+<div class="aspect-square w-full bg-surface-container-highest relative overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A vibrant, modern shot of a matcha green tea latte in a transparent glass cup, revealing layers of bright green and creamy white. The background is a solid, soft pale slate, creating a minimal, high-end look. The lighting is even and bright, aligning with a sophisticated, efficient SaaS retail environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAttIAoGLYTcQsNaKkmW09hXfxLfCmYiAei0vaBX0lOjbTa2duzq4S2-qPW2glFBVV6iVxKpwWl3tiIaxgfQRBH1ZUTYNekLLiFpwpCieLxTZ5Pkvq08FRim6wcieD-9E0oMHKlY-s6sdZD453Ko4yfCYG5TAbNUjP-Wd7zKJdB2J84k7qdO1Bo013aePGH0g4JP5zlzIdfF8tVI-Ll2kpGCuwcneI7HCnxzSBUU2ZwVowgHXXgSXewm2J_NahuEZo35NVg7ifqoeSW">
+<!-- Out of stock indicator -->
+<div class="absolute inset-0 bg-surface/50 backdrop-blur-[2px] flex items-center justify-center z-10">
+<span class="bg-surface-container-lowest text-error font-label-md text-label-md px-3 py-1 rounded-full border border-error/20 shadow-sm">Sold Out</span>
+</div>
+<div class="absolute top-2 left-2 w-3 h-3 rounded-full bg-error shadow-sm ring-2 ring-surface-container-lowest"></div>
+</div>
+<div class="p-3 flex flex-col flex-1 justify-between gap-1 opacity-60 grayscale-[50%]">
+<h2 class="font-body-md text-body-md text-on-surface line-clamp-2 leading-tight">Iced Matcha Latte</h2>
+<div class="flex justify-between items-end mt-1">
+<span class="font-price-display text-price-display text-primary tracking-tight">$4.80</span>
+<button class="w-9 h-9 rounded-full bg-surface-container text-outline flex items-center justify-center border border-outline-variant cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Product Tile 5 -->
+<article class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden active:scale-98 transition-transform duration-150 flex flex-col relative group">
+<div class="aspect-square w-full bg-surface-container-low relative overflow-hidden flex flex-col items-center justify-center gap-2 border-b border-outline-variant/30">
+    <div class="w-14 h-14 rounded-full bg-surface-container-highest flex items-center justify-center shadow-sm">
+        <span class="material-symbols-outlined text-[32px] text-secondary">coffee</span>
+    </div>
+    <span class="font-label-md text-[10px] uppercase tracking-widest text-outline">House Blend</span>
+</div>
+<div class="p-3 flex flex-col flex-1 justify-between gap-1">
+<h2 class="font-body-md text-body-md text-on-surface line-clamp-2 leading-tight">Drip Coffee (Medium)</h2>
+<div class="flex justify-between items-end mt-1">
+<span class="font-price-display text-price-display text-primary tracking-tight">$2.50</span>
+<button class="w-9 h-9 rounded-full bg-surface-container text-on-surface-variant flex items-center justify-center hover:bg-surface-container-highest hover:text-primary transition-colors border border-outline-variant shadow-sm focus:outline-none">
+<span class="material-symbols-outlined text-[20px]">add</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+</main>
+<!-- Floating Cart Action (Level 3 Overlay logic context) -->
+<div class="fixed bottom-[88px] left-0 w-full px-margin-mobile z-40 pointer-events-none">
+<!-- pointer-events-auto applied to button to allow clicks through the full-width wrapper -->
+<button class="w-full bg-secondary text-on-secondary shadow-[0_8px_16px_rgba(0,108,73,0.25),inset_0_2px_4px_rgba(255,255,255,0.2)] rounded-full h-14 flex items-center justify-between px-6 active:scale-98 transition-transform duration-150 pointer-events-auto focus:outline-none focus:ring-4 focus:ring-secondary-container">
+<div class="flex items-center gap-3">
+<div class="bg-on-secondary text-secondary rounded-full h-8 w-8 flex items-center justify-center font-label-md text-label-md font-bold shadow-sm">
+                    1
+                </div>
+<span class="font-label-md text-label-md font-bold uppercase tracking-wider">View Cart</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md text-on-secondary/80">Subtotal</span>
+<span class="font-price-display text-[24px] leading-[32px] font-bold text-on-secondary tracking-tight">$5.25</span>
+</div>
+</button>
+</div>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 pb-safe bg-surface-container shadow-[0_-4px_24px_rgba(0,0,0,0.06)] rounded-t-xl border-t border-outline-variant/30">
+<!-- Active: New Order -->
+<button class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 duration-150">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">add_shopping_cart</span>
+<span class="font-label-md text-[12px] leading-[16px] mt-1 font-bold">New Order</span>
+</button>
+<!-- Inactive: Queue -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 duration-150 rounded-full">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">format_list_bulleted</span>
+<span class="font-label-md text-[12px] leading-[16px] mt-1">Queue</span>
+</button>
+<!-- Inactive: Dashboard -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 duration-150 rounded-full">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">query_stats</span>
+<span class="font-label-md text-[12px] leading-[16px] mt-1">Dashboard</span>
+</button>
+<!-- Inactive: Menu -->
+<button class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1 hover:bg-surface-container-highest transition-colors scale-98 active:scale-95 duration-150 rounded-full">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">restaurant_menu</span>
+<span class="font-label-md text-[12px] leading-[16px] mt-1">Menu</span>
+</button>
+</nav>
+
+
+</body></html>
