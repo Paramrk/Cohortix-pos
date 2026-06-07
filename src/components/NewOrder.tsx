@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search, Sparkles, CupSoda, Layers, Flame, Banknote, Smartphone, Clock } from 'lucide-react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search, Sparkles, CupSoda, Layers, Flame, Banknote, Smartphone, Clock, Mic, MicOff, Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import {
   CartItem,
   GolaVariant,
@@ -459,6 +460,266 @@ export function NewOrder({
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Voice Assistant State
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceLanguage, setVoiceLanguage] = useState<'en' | 'gu' | 'hi'>('en');
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [voiceReply, setVoiceReply] = useState('');
+  const [voiceHistory, setVoiceHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const [voiceLoading, setVoiceLoading] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef('');
+
+  // Speech Recognition setup
+  useEffect(() => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = voiceLanguage === 'gu' ? 'gu-IN' : (voiceLanguage === 'hi' ? 'hi-IN' : 'en-IN');
+
+    rec.onstart = () => {
+      setIsListening(true);
+      setVoiceError(null);
+      transcriptRef.current = '';
+    };
+
+    rec.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+
+      const currentTranscript = finalTranscript || interimTranscript;
+      transcriptRef.current = currentTranscript;
+      setVoiceTranscript(currentTranscript);
+    };
+
+    rec.onerror = (event: any) => {
+      console.error('Speech recognition error', event);
+      if (event.error !== 'no-speech') {
+        setVoiceError(`Speech error: ${event.error}`);
+      }
+      setIsListening(false);
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      const textToProcess = transcriptRef.current.trim();
+      if (textToProcess) {
+        void handleProcessVoiceCommand(textToProcess);
+      }
+    };
+
+    recognitionRef.current = rec;
+
+    return () => {
+      rec.onstart = null;
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+    };
+  }, [voiceLanguage]);
+
+  const startListening = () => {
+    setVoiceTranscript('');
+    setVoiceError(null);
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.start();
+      } else {
+        setVoiceError('Speech recognition is not supported in this browser.');
+      }
+    } catch (err) {
+      console.error('Failed to start speech recognition', err);
+    }
+  };
+
+  const stopListening = () => {
+    try {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    } catch (err) {
+      console.error('Failed to stop speech recognition', err);
+    }
+  };
+
+  const speakText = (text: string, lang: 'en' | 'gu') => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang === 'gu' ? 'gu-IN' : 'en-US';
+      const voices = window.speechSynthesis.getVoices();
+      const matchVoice = voices.find(v => v.lang.startsWith(lang));
+      if (matchVoice) {
+        utterance.voice = matchVoice;
+      }
+      window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const placeVoiceOrder = async (
+    finalCart: CartItem[],
+    finalName: string,
+    finalInstructions: string,
+    finalPayment: 'cash' | 'upi' | 'pay_later'
+  ) => {
+    if (finalCart.length === 0) return;
+    const nextPaymentStatus: 'paid' | 'unpaid' = finalPayment === 'pay_later' ? 'unpaid' : 'paid';
+    const { subtotal: s, subtotalAfterOffer: sa } = calculateOfferTotals(finalCart, pricingRule);
+    const percentDiscountAmount = Math.round((sa * pricingRule.discountPercent) / 100);
+    const finalTotal = Math.max(0, sa - percentDiscountAmount);
+
+    const payload = {
+      customerName: finalName.trim() || 'Guest',
+      orderInstructions: finalInstructions.trim() || undefined,
+      items: finalCart,
+      total: finalTotal,
+      status: 'pending' as const,
+      paymentMethod: finalPayment,
+      paymentStatus: nextPaymentStatus,
+    };
+
+    if (isEditing && editingOrder) {
+      if (!onUpdateOrder) return;
+      setUpdatePending(true);
+      try {
+        await onUpdateOrder(editingOrder.id, {
+          customerName: payload.customerName,
+          orderInstructions: payload.orderInstructions,
+          items: payload.items,
+          total: payload.total,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: payload.paymentStatus,
+        });
+        handleExitEditMode();
+      } catch (err) {
+        setEditError(err instanceof Error ? err.message : 'Failed to update order');
+      } finally {
+        setUpdatePending(false);
+      }
+    } else {
+      const result = await onPlaceOrder(payload);
+      if (result) {
+        resetOrderForm();
+      }
+    }
+  };
+
+  const handleProcessVoiceCommand = async (transcript: string) => {
+    if (!transcript.trim()) return;
+    setVoiceLoading(true);
+    setVoiceError(null);
+
+    const userMessage = { role: 'user' as const, content: transcript };
+    setVoiceHistory(prev => [...prev, userMessage]);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('pos-ai-assistant', {
+        body: {
+          shopId: 'main',
+          language: voiceLanguage === 'gu' ? 'gu' : 'en',
+          customerName: customerName,
+          paymentMethod: paymentMethod,
+          message: transcript,
+          cart: cart.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            variant: item.variant,
+            calculatedPrice: item.calculatedPrice
+          })),
+          conversation: voiceHistory
+        }
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        const { reply, intent, paymentMethod: nextPayment, customerName: nextName, orderInstructions: nextInstructions, orderDraft } = data;
+
+        setVoiceReply(reply);
+        setVoiceHistory(prev => [...prev, { role: 'assistant', content: reply }]);
+
+        if (ttsEnabled) {
+          speakText(reply, voiceLanguage === 'gu' ? 'gu' : 'en');
+        }
+
+        if (nextPayment && nextPayment !== paymentMethod) {
+          setPaymentMethod(nextPayment);
+        }
+        if (nextName !== undefined && nextName !== customerName) {
+          setCustomerName(nextName);
+        }
+        if (nextInstructions !== undefined && nextInstructions !== orderInstructions) {
+          setOrderInstructions(nextInstructions);
+        }
+
+        let finalCart = cart;
+        if (orderDraft?.items) {
+          const updatedCart = orderDraft.items.map((draftItem: any) => {
+            const menuItem = menuItems.find(m => m.id === draftItem.menuItemId);
+            const existingCartItem = cart.find(
+              c => c.id === draftItem.menuItemId && c.variant === draftItem.variant
+            );
+            const baseItem = menuItem || {
+              id: draftItem.menuItemId,
+              name: draftItem.name,
+              category: draftItem.category || 'Regular',
+              price: draftItem.price || draftItem.calculatedPrice,
+              hasVariants: false,
+              hasGolaVariants: false,
+            };
+            return {
+              ...baseItem,
+              cartItemId: existingCartItem?.cartItemId || `${draftItem.menuItemId}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              quantity: draftItem.quantity,
+              variant: draftItem.variant,
+              calculatedPrice: draftItem.calculatedPrice,
+            } as CartItem;
+          });
+          setCart(updatedCart);
+          finalCart = updatedCart;
+        } else if (intent === 'clear_order') {
+          setCart([]);
+          setCustomerName('');
+          setOrderInstructions('');
+          setPaymentMethod('cash');
+          finalCart = [];
+        }
+
+        if (intent === 'order_confirm') {
+          const confirmMsg = voiceLanguage === 'gu' 
+            ? 'ઓર્ડર મોકલવામાં આવી રહ્યો છે.' 
+            : 'Placing order now.';
+          if (ttsEnabled) {
+            speakText(confirmMsg, voiceLanguage === 'gu' ? 'gu' : 'en');
+          }
+          await placeVoiceOrder(finalCart, nextName || customerName, nextInstructions || orderInstructions, nextPayment || paymentMethod);
+          setShowVoiceAssistant(false);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to process voice command', err);
+      setVoiceError(err instanceof Error ? err.message : 'Voice assistant service failed.');
+    } finally {
+      setVoiceLoading(false);
+    }
+  };
+
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(POS_DRAFT_STORAGE_KEY);
@@ -772,24 +1033,37 @@ export function NewOrder({
         
         {/* Search & Category Filter Section */}
         <div className="sticky top-[56px] md:top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-outline-variant/50 w-full py-3 px-4 mb-5 -mx-4 sm:-mx-6 flex flex-col gap-3">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search items by name or category..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-11 pr-10 border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/60 shadow-sm"
-            />
-            <Search className="w-4 h-4 text-on-surface-variant/60 absolute left-4 top-3.5" />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-3 h-5 w-5 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant/60"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search items by name or category..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full h-11 pl-11 pr-10 border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/60 shadow-sm"
+              />
+              <Search className="w-4 h-4 text-on-surface-variant/60 absolute left-4 top-3.5" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3.5 top-3 h-5 w-5 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant/60"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowVoiceAssistant(true);
+                startListening();
+              }}
+              className="h-11 px-4 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-full flex items-center gap-2 shadow-sm font-bold text-xs active:scale-95 transition-all shrink-0 border border-violet-500/20"
+            >
+              <Sparkles className="w-4 h-4 text-violet-200 animate-pulse" />
+              <span>Voice Order</span>
+            </button>
           </div>
           <div className="flex gap-2 items-center overflow-x-auto no-scrollbar w-full">
             <button
@@ -1240,6 +1514,193 @@ export function NewOrder({
             </div>
             <div className="flex-1 min-h-0 flex flex-col">
               <CartContent {...cartContentCommonProps} showHeader={false} />
+            </div>
+          </div>
+        </div>
+      )}
+      {showVoiceAssistant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <style>{`
+            @keyframes pulse-ring {
+              0% { transform: scale(0.95); opacity: 0.5; }
+              50% { transform: scale(1.1); opacity: 0.8; }
+              100% { transform: scale(0.95); opacity: 0.5; }
+            }
+            @keyframes soundwave-bar {
+              0%, 100% { height: 8px; }
+              50% { height: 28px; }
+            }
+            .animate-pulse-ring {
+              animation: pulse-ring 2s infinite ease-in-out;
+            }
+            .soundwave-bar-1 { animation: soundwave-bar 0.6s infinite ease-in-out; }
+            .soundwave-bar-2 { animation: soundwave-bar 0.8s infinite ease-in-out 0.1s; }
+            .soundwave-bar-3 { animation: soundwave-bar 0.5s infinite ease-in-out 0.2s; }
+            .soundwave-bar-4 { animation: soundwave-bar 0.7s infinite ease-in-out 0.15s; }
+            .soundwave-bar-5 { animation: soundwave-bar 0.9s infinite ease-in-out 0.05s; }
+          `}</style>
+          
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-md overflow-hidden flex flex-col transition-all duration-300 transform scale-100">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-violet-200 animate-pulse" />
+                <h3 className="font-bold text-sm font-headline">POS Voice Assistant</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  stopListening();
+                  setShowVoiceAssistant(false);
+                }}
+                className="rounded-full p-1 bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 flex-1 flex flex-col items-center gap-6">
+              
+              {/* Waveforms & Mic Button */}
+              <div className="relative flex flex-col items-center justify-center h-36 w-full">
+                {isListening ? (
+                  <div className="flex items-end gap-1.5 h-16 mb-4">
+                    <span className="w-1.5 bg-violet-600 rounded-full soundwave-bar-1" style={{ height: '8px' }} />
+                    <span className="w-1.5 bg-indigo-600 rounded-full soundwave-bar-2" style={{ height: '8px' }} />
+                    <span className="w-1.5 bg-fuchsia-600 rounded-full soundwave-bar-3" style={{ height: '8px' }} />
+                    <span className="w-1.5 bg-violet-600 rounded-full soundwave-bar-4" style={{ height: '8px' }} />
+                    <span className="w-1.5 bg-indigo-600 rounded-full soundwave-bar-5" style={{ height: '8px' }} />
+                  </div>
+                ) : (
+                  <div className="h-16 flex items-center justify-center mb-4">
+                    <Sparkles className="w-8 h-8 text-indigo-500/40 animate-pulse" />
+                  </div>
+                )}
+
+                {/* Mic trigger button */}
+                <button
+                  type="button"
+                  onClick={isListening ? stopListening : startListening}
+                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 relative z-10 ${
+                    isListening
+                      ? 'bg-rose-500 text-white hover:bg-rose-600 ring-4 ring-rose-500/20'
+                      : 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 hover:scale-105 active:scale-95'
+                  }`}
+                >
+                  {isListening ? (
+                    <MicOff className="w-6 h-6" />
+                  ) : (
+                    <Mic className="w-6 h-6 animate-pulse" />
+                  )}
+                  {isListening && (
+                    <span className="absolute inset-0 rounded-full border-4 border-rose-500/40 animate-pulse-ring" />
+                  )}
+                </button>
+                
+                <span className="text-xs font-semibold text-slate-500 mt-3 uppercase tracking-wider">
+                  {isListening ? 'Listening...' : voiceLoading ? 'Processing...' : 'Tap to speak'}
+                </span>
+              </div>
+
+              {/* Settings & Language */}
+              <div className="flex justify-between items-center w-full bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 text-xs">
+                <div className="flex gap-1">
+                  {(['en', 'gu', 'hi'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setVoiceLanguage(lang)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all uppercase ${
+                        voiceLanguage === lang
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-200/50'
+                      }`}
+                    >
+                      {lang === 'en' ? 'EN' : lang === 'gu' ? 'GU' : 'HI'}
+                    </button>
+                  ))}
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setTtsEnabled(!ttsEnabled)}
+                  className="flex items-center gap-1.5 font-semibold text-slate-600 hover:text-indigo-600"
+                >
+                  {ttsEnabled ? (
+                    <>
+                      <Volume2 className="w-4 h-4 text-indigo-600" />
+                      <span>Voice On</span>
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-4 h-4 text-slate-400" />
+                      <span>Muted</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Transcript Display */}
+              <div className="w-full flex-1 flex flex-col gap-3 min-h-[140px] max-h-[220px] overflow-y-auto">
+                {voiceTranscript && (
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 text-sm flex gap-2">
+                    <span className="font-bold text-indigo-600 shrink-0">You:</span>
+                    <p className="text-slate-700 italic">"{voiceTranscript}"</p>
+                  </div>
+                )}
+                
+                {voiceReply && (
+                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-sm flex gap-2">
+                    <Sparkles className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold text-violet-600">Assistant:</span>
+                      <p className="text-slate-700 mt-1 font-semibold">{voiceReply}</p>
+                    </div>
+                  </div>
+                )}
+
+                {voiceLoading && (
+                  <div className="flex items-center justify-center gap-2 py-4">
+                    <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+                    <span className="text-xs font-semibold text-slate-400 animate-pulse">AI is working...</span>
+                  </div>
+                )}
+
+                {voiceError && (
+                  <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 text-xs w-full text-center">
+                    {voiceError}
+                  </div>
+                )}
+              </div>
+
+              {/* Helpful Tips / Examples */}
+              <div className="w-full">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Voice Commands to try:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    voiceLanguage === 'gu' ? '૨ પ્લેન ડીશ' : 'Add 2 Plain Golas',
+                    voiceLanguage === 'gu' ? '૧ ડ્રાયફ્રુટ ડીશ ઉમેરો' : 'Add 1 Dry Fruit Gola',
+                    voiceLanguage === 'gu' ? 'યુપીઆઈ થી પેમેન્ટ' : 'Set payment UPI',
+                    voiceLanguage === 'gu' ? 'ગ્રાહક રાજ છે' : 'Customer name Raj',
+                    voiceLanguage === 'gu' ? 'ઓર્ડર કન્ફર્મ કરો' : 'Confirm Order',
+                  ].map((cmd) => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      onClick={() => {
+                        setVoiceTranscript(cmd);
+                        void handleProcessVoiceCommand(cmd);
+                      }}
+                      className="text-[10px] font-semibold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 px-2.5 py-1.5 rounded-lg border border-slate-200/50 transition-all active:scale-95 text-left"
+                    >
+                      "{cmd}"
+                    </button>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
         </div>

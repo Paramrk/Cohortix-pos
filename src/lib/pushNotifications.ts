@@ -112,7 +112,7 @@ export async function showLocalNotification(
       requireInteraction: true,
       vibrate: [200, 100, 200],
       data: options.data ?? {},
-    });
+    } as any);
   }
 }
 
@@ -154,7 +154,7 @@ export async function subscribeToPush(): Promise<PushSubscription | null> {
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY) as any,
   });
 
   await persistSubscription(subscription);
