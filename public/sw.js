@@ -1,4 +1,10 @@
-self.addEventListener('install', () => {
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('cohortix-v1').then((cache) => {
+      // Cache assets if needed
+      return Promise.resolve();
+    })
+  );
   self.skipWaiting();
 });
 

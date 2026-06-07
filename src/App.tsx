@@ -417,6 +417,7 @@ export default function App() {
     };
 
     updateInstalledState();
+    // beforeinstallprompt only fires on Android; iOS uses different mechanism
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
 
