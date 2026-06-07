@@ -462,8 +462,31 @@ export function NewOrder({
 
   // Voice Assistant State
   const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
+  const showVoiceAssistantRef = useRef(showVoiceAssistant);
+  useEffect(() => {
+    showVoiceAssistantRef.current = showVoiceAssistant;
+  }, [showVoiceAssistant]);
   const [isListening, setIsListening] = useState(false);
-  const [voiceLanguage, setVoiceLanguage] = useState<'en' | 'gu' | 'hi'>('en');
+  const [voiceLanguage, setVoiceLanguage] = useState<'en' | 'gu' | 'hi'>(() => {
+    try {
+      const stored = localStorage.getItem('pos_voice_language');
+      if (stored === 'en' || stored === 'gu' || stored === 'hi') {
+        return stored;
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return 'gu';
+  });
+
+  const selectLanguage = (lang: 'en' | 'gu' | 'hi') => {
+    setVoiceLanguage(lang);
+    try {
+      localStorage.setItem('pos_voice_language', lang);
+    } catch {
+      // Ignore storage error
+    }
+  };
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [voiceReply, setVoiceReply] = useState('');
   const [voiceHistory, setVoiceHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
@@ -473,6 +496,7 @@ export function NewOrder({
 
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
+  const handleProcessVoiceCommandRef = useRef<(transcript: string) => Promise<void>>(null as any);
 
   // Speech Recognition setup
   useEffect(() => {
@@ -519,7 +543,7 @@ export function NewOrder({
       setIsListening(false);
       const textToProcess = transcriptRef.current.trim();
       if (textToProcess) {
-        void handleProcessVoiceCommand(textToProcess);
+        void handleProcessVoiceCommandRef.current(textToProcess);
       }
     };
 
@@ -557,7 +581,7 @@ export function NewOrder({
     }
   };
 
-  const speakText = (text: string, lang: 'en' | 'gu') => {
+  const speakText = (text: string, lang: 'en' | 'gu', onEndCallback?: () => void) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
@@ -566,6 +590,11 @@ export function NewOrder({
       const matchVoice = voices.find(v => v.lang.startsWith(lang));
       if (matchVoice) {
         utterance.voice = matchVoice;
+      }
+      if (onEndCallback) {
+        utterance.onend = () => {
+          onEndCallback();
+        };
       }
       window.speechSynthesis.speak(utterance);
     }
@@ -655,7 +684,19 @@ export function NewOrder({
         setVoiceHistory(prev => [...prev, { role: 'assistant', content: reply }]);
 
         if (ttsEnabled) {
-          speakText(reply, voiceLanguage === 'gu' ? 'gu' : 'en');
+          speakText(reply, voiceLanguage === 'gu' ? 'gu' : 'en', () => {
+            if (intent !== 'order_confirm' && showVoiceAssistantRef.current) {
+              startListening();
+            }
+          });
+        } else {
+          if (intent !== 'order_confirm' && showVoiceAssistantRef.current) {
+            setTimeout(() => {
+              if (showVoiceAssistantRef.current) {
+                startListening();
+              }
+            }, 800);
+          }
         }
 
         if (nextPayment && nextPayment !== paymentMethod) {
@@ -719,6 +760,7 @@ export function NewOrder({
       setVoiceLoading(false);
     }
   };
+  handleProcessVoiceCommandRef.current = handleProcessVoiceCommand;
 
   useEffect(() => {
     try {
@@ -1519,7 +1561,7 @@ export function NewOrder({
         </div>
       )}
       {showVoiceAssistant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-4xl px-4 pointer-events-none">
           <style>{`
             @keyframes pulse-ring {
               0% { transform: scale(0.95); opacity: 0.5; }
@@ -1540,168 +1582,119 @@ export function NewOrder({
             .soundwave-bar-5 { animation: soundwave-bar 0.9s infinite ease-in-out 0.05s; }
           `}</style>
           
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-md overflow-hidden flex flex-col transition-all duration-300 transform scale-100">
+          <div className="bg-slate-900/95 text-white backdrop-blur-md border border-slate-700/60 shadow-2xl rounded-full px-5 py-3.5 flex items-center justify-between gap-4 pointer-events-auto w-full transition-all duration-300">
             
-            {/* Header */}
-            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-4 flex items-center justify-between text-white">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-violet-200 animate-pulse" />
-                <h3 className="font-bold text-sm font-headline">POS Voice Assistant</h3>
+            {/* Left: Pulse Mic & Status */}
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={isListening ? stopListening : startListening}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-md relative z-10 transition-all ${
+                  isListening
+                    ? 'bg-rose-500 hover:bg-rose-600 ring-4 ring-rose-500/30 font-bold'
+                    : 'bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 active:scale-95'
+                }`}
+              >
+                {isListening ? (
+                  <MicOff className="w-4 h-4 text-white" />
+                ) : (
+                  <Mic className="w-4 h-4 text-white animate-pulse" />
+                )}
+                {isListening && (
+                  <span className="absolute inset-0 rounded-full border-4 border-rose-500/40 animate-pulse-ring" />
+                )}
+              </button>
+              
+              {isListening && (
+                <div className="flex items-end gap-1 h-6 shrink-0">
+                  <span className="w-1 bg-violet-400 rounded-full soundwave-bar-1" style={{ height: '6px' }} />
+                  <span className="w-1 bg-indigo-400 rounded-full soundwave-bar-2" style={{ height: '6px' }} />
+                  <span className="w-1 bg-fuchsia-400 rounded-full soundwave-bar-3" style={{ height: '6px' }} />
+                </div>
+              )}
+
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                {isListening ? 'Listening' : voiceLoading ? 'Processing' : 'Voice Assistant'}
+              </span>
+            </div>
+
+            {/* Center: Live Ticker / Transcript Preview */}
+            <div className="flex-1 min-w-0 bg-slate-950/40 rounded-full py-1.5 px-4 border border-slate-800/60 flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+              <div className="flex-1 min-w-0 text-xs">
+                {voiceTranscript ? (
+                  <span className="text-slate-300 font-medium truncate block">
+                    <strong className="text-indigo-400 font-bold mr-1">You:</strong>
+                    "{voiceTranscript}"
+                  </span>
+                ) : voiceReply ? (
+                  <span className="text-slate-200 font-semibold truncate block">
+                    <strong className="text-violet-400 font-bold mr-1">AI:</strong>
+                    {voiceReply}
+                  </span>
+                ) : voiceLoading ? (
+                  <span className="text-slate-400 italic animate-pulse block">Analyzing your command...</span>
+                ) : voiceError ? (
+                  <span className="text-rose-400 font-semibold truncate block">{voiceError}</span>
+                ) : (
+                  <span className="text-slate-400 block font-medium">Say "Add 2 Plain Golas" or "Pay with UPI"</span>
+                )}
               </div>
+            </div>
+
+            {/* Right: Cart Status, Language Switcher, Controls & Close */}
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Mini Cart summary preview */}
+              <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/50 text-[11px] font-bold font-mono">
+                <span>🛒 {totalItems} items</span>
+                <span className="text-indigo-300">₹{total}</span>
+              </div>
+
+              {/* Language buttons */}
+              <div className="flex gap-0.5 bg-slate-800/60 p-0.5 rounded-lg text-[10px]">
+                {(['en', 'gu', 'hi'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => selectLanguage(lang)}
+                    className={`px-1.5 py-0.5 rounded font-bold transition-all uppercase ${
+                      voiceLanguage === lang
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {lang === 'en' ? 'EN' : lang === 'gu' ? 'GU' : 'HI'}
+                  </button>
+                ))}
+              </div>
+
+              {/* TTS toggler */}
+              <button
+                type="button"
+                onClick={() => setTtsEnabled(!ttsEnabled)}
+                className="rounded-full p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                title={ttsEnabled ? 'Mute synthesis' : 'Unmute synthesis'}
+              >
+                {ttsEnabled ? (
+                  <Volume2 className="w-4 h-4 text-indigo-400" />
+                ) : (
+                  <VolumeX className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Close */}
               <button
                 type="button"
                 onClick={() => {
                   stopListening();
                   setShowVoiceAssistant(false);
                 }}
-                className="rounded-full p-1 bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white"
+                className="rounded-full p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-slate-300 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Content */}
-            <div className="p-6 flex-1 flex flex-col items-center gap-6">
-              
-              {/* Waveforms & Mic Button */}
-              <div className="relative flex flex-col items-center justify-center h-36 w-full">
-                {isListening ? (
-                  <div className="flex items-end gap-1.5 h-16 mb-4">
-                    <span className="w-1.5 bg-violet-600 rounded-full soundwave-bar-1" style={{ height: '8px' }} />
-                    <span className="w-1.5 bg-indigo-600 rounded-full soundwave-bar-2" style={{ height: '8px' }} />
-                    <span className="w-1.5 bg-fuchsia-600 rounded-full soundwave-bar-3" style={{ height: '8px' }} />
-                    <span className="w-1.5 bg-violet-600 rounded-full soundwave-bar-4" style={{ height: '8px' }} />
-                    <span className="w-1.5 bg-indigo-600 rounded-full soundwave-bar-5" style={{ height: '8px' }} />
-                  </div>
-                ) : (
-                  <div className="h-16 flex items-center justify-center mb-4">
-                    <Sparkles className="w-8 h-8 text-indigo-500/40 animate-pulse" />
-                  </div>
-                )}
-
-                {/* Mic trigger button */}
-                <button
-                  type="button"
-                  onClick={isListening ? stopListening : startListening}
-                  className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 relative z-10 ${
-                    isListening
-                      ? 'bg-rose-500 text-white hover:bg-rose-600 ring-4 ring-rose-500/20'
-                      : 'bg-gradient-to-br from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 hover:scale-105 active:scale-95'
-                  }`}
-                >
-                  {isListening ? (
-                    <MicOff className="w-6 h-6" />
-                  ) : (
-                    <Mic className="w-6 h-6 animate-pulse" />
-                  )}
-                  {isListening && (
-                    <span className="absolute inset-0 rounded-full border-4 border-rose-500/40 animate-pulse-ring" />
-                  )}
-                </button>
-                
-                <span className="text-xs font-semibold text-slate-500 mt-3 uppercase tracking-wider">
-                  {isListening ? 'Listening...' : voiceLoading ? 'Processing...' : 'Tap to speak'}
-                </span>
-              </div>
-
-              {/* Settings & Language */}
-              <div className="flex justify-between items-center w-full bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100 text-xs">
-                <div className="flex gap-1">
-                  {(['en', 'gu', 'hi'] as const).map((lang) => (
-                    <button
-                      key={lang}
-                      type="button"
-                      onClick={() => setVoiceLanguage(lang)}
-                      className={`px-2.5 py-1 rounded-lg font-bold transition-all uppercase ${
-                        voiceLanguage === lang
-                          ? 'bg-indigo-600 text-white shadow-sm'
-                          : 'text-slate-600 hover:bg-slate-200/50'
-                      }`}
-                    >
-                      {lang === 'en' ? 'EN' : lang === 'gu' ? 'GU' : 'HI'}
-                    </button>
-                  ))}
-                </div>
-                
-                <button
-                  type="button"
-                  onClick={() => setTtsEnabled(!ttsEnabled)}
-                  className="flex items-center gap-1.5 font-semibold text-slate-600 hover:text-indigo-600"
-                >
-                  {ttsEnabled ? (
-                    <>
-                      <Volume2 className="w-4 h-4 text-indigo-600" />
-                      <span>Voice On</span>
-                    </>
-                  ) : (
-                    <>
-                      <VolumeX className="w-4 h-4 text-slate-400" />
-                      <span>Muted</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Transcript Display */}
-              <div className="w-full flex-1 flex flex-col gap-3 min-h-[140px] max-h-[220px] overflow-y-auto">
-                {voiceTranscript && (
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 text-sm flex gap-2">
-                    <span className="font-bold text-indigo-600 shrink-0">You:</span>
-                    <p className="text-slate-700 italic">"{voiceTranscript}"</p>
-                  </div>
-                )}
-                
-                {voiceReply && (
-                  <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-sm flex gap-2">
-                    <Sparkles className="w-4 h-4 text-violet-500 shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <span className="font-bold text-violet-600">Assistant:</span>
-                      <p className="text-slate-700 mt-1 font-semibold">{voiceReply}</p>
-                    </div>
-                  </div>
-                )}
-
-                {voiceLoading && (
-                  <div className="flex items-center justify-center gap-2 py-4">
-                    <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
-                    <span className="text-xs font-semibold text-slate-400 animate-pulse">AI is working...</span>
-                  </div>
-                )}
-
-                {voiceError && (
-                  <div className="bg-rose-50 border border-rose-200 text-rose-700 rounded-xl p-3 text-xs w-full text-center">
-                    {voiceError}
-                  </div>
-                )}
-              </div>
-
-              {/* Helpful Tips / Examples */}
-              <div className="w-full">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2">Voice Commands to try:</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    voiceLanguage === 'gu' ? '૨ પ્લેન ડીશ' : 'Add 2 Plain Golas',
-                    voiceLanguage === 'gu' ? '૧ ડ્રાયફ્રુટ ડીશ ઉમેરો' : 'Add 1 Dry Fruit Gola',
-                    voiceLanguage === 'gu' ? 'યુપીઆઈ થી પેમેન્ટ' : 'Set payment UPI',
-                    voiceLanguage === 'gu' ? 'ગ્રાહક રાજ છે' : 'Customer name Raj',
-                    voiceLanguage === 'gu' ? 'ઓર્ડર કન્ફર્મ કરો' : 'Confirm Order',
-                  ].map((cmd) => (
-                    <button
-                      key={cmd}
-                      type="button"
-                      onClick={() => {
-                        setVoiceTranscript(cmd);
-                        void handleProcessVoiceCommand(cmd);
-                      }}
-                      className="text-[10px] font-semibold bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 px-2.5 py-1.5 rounded-lg border border-slate-200/50 transition-all active:scale-95 text-left"
-                    >
-                      "{cmd}"
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-            </div>
+            
           </div>
         </div>
       )}
