@@ -1,7 +1,39 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Edit2, Trash2, Save, Tag, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, Tag, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react';
 import { MenuItem, GolaVariant, PricingRule, Order, VariantMode } from '../types';
 import { isStickRestrictedCategory } from '../utils/category';
+import { CategoryIcon } from './NewOrder';
+
+export function StickIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9a6 6 0 0 1 12 0v5a3 3 0 0 1-3 3H9a3 3 0 0 1-3-3V9z" />
+      <path d="M12 17v4" />
+      <path d="M10 9v4" />
+      <path d="M14 9v4" />
+    </svg>
+  );
+}
+
+export function DishIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12a7 7 0 0 1 14 0z" />
+      <path d="M3 12h18a1 1 0 0 1 1 1 8 8 0 0 1-8 8h-4a8 8 0 0 1-8-8 1 1 0 0 1 1-1z" />
+    </svg>
+  );
+}
+
+export function IceCubeIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <path d="M3.27 6.96L12 12.01l8.73-5.05" />
+      <path d="M12 22.08V12" />
+    </svg>
+  );
+}
+
 
 interface MenuManagerProps {
   menuItems: MenuItem[];
@@ -14,20 +46,21 @@ interface MenuManagerProps {
   onUpdatePricingRule: (next: Partial<PricingRule>) => Promise<void>;
   theme?: string;
   onChangeTheme?: (theme: string) => void;
+  customPrimary?: string;
+  onChangeCustomPrimary?: (color: string) => void;
+  customSecondary?: string;
+  onChangeCustomSecondary?: (color: string) => void;
+  customBackground?: string;
+  onChangeCustomBackground?: (color: string) => void;
+  customSurface?: string;
+  onChangeCustomSurface?: (color: string) => void;
+  customText?: string;
+  onChangeCustomText?: (color: string) => void;
 }
 
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain', 'Stick'];
-
 const DEFAULT_CATEGORIES = ['Regular', 'Special Dish', 'Pyali'] as const;
 const CUSTOM_CATEGORIES_STORAGE_KEY = 'pos_custom_categories_v1';
-
-const CATEGORY_ICONS: Record<string, string> = {
-  Regular: '\u{1F361}',
-  Special: '\u2B50',
-  'Special Dish': '\u2B50',
-  Pyali: '\u{1F367}',
-  Pyaali: '\u{1F367}',
-};
 
 interface FormState {
   name: string;
@@ -134,8 +167,19 @@ export function MenuManager({
   onUpdatePricingRule,
   theme = 'theme-default',
   onChangeTheme,
+  customPrimary = '#000000',
+  onChangeCustomPrimary,
+  customSecondary = '#006c49',
+  onChangeCustomSecondary,
+  customBackground = '#f8f9ff',
+  onChangeCustomBackground,
+  customSurface = '#ffffff',
+  onChangeCustomSurface,
+  customText = '#0b1c30',
+  onChangeCustomText,
 }: MenuManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm());
   const [saving, setSaving] = useState(false);
   const [savingOffers, setSavingOffers] = useState(false);
@@ -147,6 +191,39 @@ export function MenuManager({
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
   const [orderSourceFilter, setOrderSourceFilter] = useState<'all' | 'pos' | 'customer'>('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState<'all' | Order['paymentStatus']>('all');
+
+  const [draftPrimary, setDraftPrimary] = useState(customPrimary);
+  const [draftSecondary, setDraftSecondary] = useState(customSecondary);
+  const [draftBackground, setDraftBackground] = useState(customBackground);
+  const [draftSurface, setDraftSurface] = useState(customSurface);
+  const [draftText, setDraftText] = useState(customText);
+
+  useEffect(() => {
+    setDraftPrimary(customPrimary);
+  }, [customPrimary]);
+
+  useEffect(() => {
+    setDraftSecondary(customSecondary);
+  }, [customSecondary]);
+
+  useEffect(() => {
+    setDraftBackground(customBackground);
+  }, [customBackground]);
+
+  useEffect(() => {
+    setDraftSurface(customSurface);
+  }, [customSurface]);
+
+  useEffect(() => {
+    setDraftText(customText);
+  }, [customText]);
+
+  const hasUnsavedThemeChanges =
+    draftPrimary !== customPrimary ||
+    draftSecondary !== customSecondary ||
+    draftBackground !== customBackground ||
+    draftSurface !== customSurface ||
+    draftText !== customText;
 
   const [isBulkEdit, setIsBulkEdit] = useState(false);
   const [bulkDrafts, setBulkDrafts] = useState<Record<string, Partial<FormState>>>({});
@@ -622,37 +699,335 @@ export function MenuManager({
           </div>
         </div>
       )}
-
       {/* App Theme / Color Schema Panel */}
       <div className="bg-surface-container-lowest p-5 rounded-xl shadow-sm border border-outline-variant space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider font-headline">App Theme (Color Schema)</h3>
-          <p className="text-xs text-on-surface-variant mt-1">
-            Choose a color schema to personalize the POS interface.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider font-headline">App Theme (Color Schema)</h3>
+            <p className="text-xs text-on-surface-variant mt-1">
+              Choose a color schema to personalize the POS interface.
+            </p>
+          </div>
+
+          <div className="relative min-w-[260px]">
+            {(() => {
+              const lights = [
+                { id: 'theme-default', name: 'Default Emerald', color: 'bg-[#006c49]' },
+                { id: 'theme-ocean', name: 'Ocean Splash', color: 'bg-[#0284c7]' },
+                { id: 'theme-sunset', name: 'Sunset Glow', color: 'bg-[#ea580c]' },
+                { id: 'theme-lavender', name: 'Lavender Breeze', color: 'bg-[#7c3aed]' },
+                { id: 'theme-forest', name: 'Forest Moss', color: 'bg-[#15803d]' },
+                { id: 'theme-nordic', name: 'Nordic Frost', color: 'bg-[#1e40af]' },
+                { id: 'theme-rose', name: 'Rose Blossom', color: 'bg-[#be123c]' },
+                { id: 'theme-amber', name: 'Warm Amber', color: 'bg-[#b45309]' },
+                { id: 'theme-plum', name: 'Royal Plum', color: 'bg-[#581c87]' },
+                { id: 'theme-charcoal', name: 'Charcoal Minimal', color: 'bg-[#1e293b]' },
+                { id: 'theme-crimson', name: 'Crimson Wine', color: 'bg-[#991b1b]' },
+                { id: 'theme-sage', name: 'Sage Mint', color: 'bg-[#14532d]' },
+                { id: 'theme-steel', name: 'Steel Blue', color: 'bg-[#1e3a8a]' },
+                { id: 'theme-terracotta', name: 'Warm Terracotta', color: 'bg-[#7c2d12]' },
+                { id: 'theme-sakura', name: 'Sakura Cherry', color: 'bg-[#db2777]' },
+                { id: 'theme-citrus', name: 'Citrus Zest', color: 'bg-[#4d7c0f]' },
+                { id: 'theme-midnight', name: 'Midnight Navy', color: 'bg-[#1e1b4b]' },
+              ];
+              const darks = [
+                { id: 'theme-dark', name: 'Classic Dark', color: 'bg-[#10b981]' },
+                { id: 'theme-eclipse', name: 'Midnight Eclipse', color: 'bg-[#a78bfa]' },
+                { id: 'theme-abyss', name: 'Abyss Blue', color: 'bg-[#38bdf8]' },
+                { id: 'theme-carbon', name: 'Carbon Gold', color: 'bg-[#fbbf24]' },
+                { id: 'theme-emerald-night', name: 'Emerald Night', color: 'bg-[#34d399]' },
+                { id: 'theme-rose-noir', name: 'Rose Noir', color: 'bg-[#fda4af]' },
+              ];
+              const customs = [
+                { id: 'theme-custom', name: 'Create Custom Theme', color: 'bg-gradient-to-r from-rose-500 via-emerald-500 to-sky-500' },
+              ];
+              const current = [...lights, ...darks, ...customs].find(t => t.id === theme) || lights[0];
+
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+                    className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm font-bold text-on-surface flex items-center justify-between gap-2 shadow-sm transition-all hover:bg-surface-container-low"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${current.color}`} />
+                      <span>{current.name}</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isThemeDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {isThemeDropdownOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setIsThemeDropdownOpen(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-full sm:w-[320px] max-h-[350px] overflow-y-auto bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-2xl z-40 p-2 space-y-3">
+                        <div>
+                          <div className="px-3 py-1 text-[9px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Light Themes</div>
+                          <div className="grid grid-cols-1 gap-0.5 mt-1">
+                            {lights.map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  onChangeTheme?.(t.id);
+                                  setIsThemeDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-left hover:bg-surface-container transition-colors ${
+                                  theme === t.id ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface'
+                                }`}
+                              >
+                                <span className={`w-3 h-3 rounded-full shrink-0 ${t.color}`} />
+                                <span className="truncate">{t.name}</span>
+                                {theme === t.id && <span className="ml-auto text-secondary text-xs">✓</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="border-t border-outline-variant/50 pt-2">
+                          <div className="px-3 py-1 text-[9px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Dark Themes</div>
+                          <div className="grid grid-cols-1 gap-0.5 mt-1">
+                            {darks.map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  onChangeTheme?.(t.id);
+                                  setIsThemeDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-left hover:bg-surface-container transition-colors ${
+                                  theme === t.id ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface'
+                                }`}
+                              >
+                                <span className={`w-3 h-3 rounded-full shrink-0 ${t.color}`} />
+                                <span className="truncate">{t.name}</span>
+                                {theme === t.id && <span className="ml-auto text-secondary text-xs">✓</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="border-t border-outline-variant/50 pt-2">
+                          <div className="px-3 py-1 text-[9px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Customization</div>
+                          <div className="grid grid-cols-1 mt-1">
+                            {customs.map((t) => (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  onChangeTheme?.(t.id);
+                                  setIsThemeDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-left hover:bg-surface-container transition-colors ${
+                                  theme === t.id ? 'bg-secondary-container text-on-secondary-container' : 'text-on-surface'
+                                }`}
+                              >
+                                <span className={`w-3 h-3 rounded-full shrink-0 ${t.color}`} />
+                                <span className="truncate">{t.name}</span>
+                                {theme === t.id && <span className="ml-auto text-secondary text-xs">✓</span>}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
-          {[
-            { id: 'theme-default', name: 'Default Emerald', color: 'bg-[#006c49]' },
-            { id: 'theme-ocean', name: 'Ocean Splash', color: 'bg-[#0284c7]' },
-            { id: 'theme-sunset', name: 'Sunset Glow', color: 'bg-[#ea580c]' },
-            { id: 'theme-dark', name: 'Classic Dark', color: 'bg-[#10b981]' },
-          ].map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onChangeTheme?.(t.id)}
-              className={`flex items-center gap-2 px-4 h-12 rounded-xl text-xs font-bold border transition-all scale-98 active:scale-95 text-left cursor-pointer ${
-                theme === t.id
-                  ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm ring-2 ring-secondary'
-                  : 'bg-surface text-on-surface border-outline-variant hover:bg-surface-container'
-              }`}
-            >
-              <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${t.color}`} />
-              <span className="truncate">{t.name}</span>
-            </button>
-          ))}
-        </div>
+        {theme === 'theme-custom' && (
+          <div className="pt-4 border-t border-outline-variant space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Color Controls (Left Column) */}
+              <div className="lg:col-span-7 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Custom Primary Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={draftPrimary}
+                        onChange={(e) => setDraftPrimary(e.target.value)}
+                        className="w-10 h-10 border border-outline-variant rounded-lg cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={draftPrimary}
+                        onChange={(e) => setDraftPrimary(e.target.value)}
+                        className="h-10 px-3 border border-outline-variant bg-surface rounded-xl text-xs font-mono text-on-surface uppercase w-32 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Custom Secondary Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={draftSecondary}
+                        onChange={(e) => setDraftSecondary(e.target.value)}
+                        className="w-10 h-10 border border-outline-variant rounded-lg cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={draftSecondary}
+                        onChange={(e) => setDraftSecondary(e.target.value)}
+                        className="h-10 px-3 border border-outline-variant bg-surface rounded-xl text-xs font-mono text-on-surface uppercase w-32 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Custom Background Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={draftBackground}
+                        onChange={(e) => setDraftBackground(e.target.value)}
+                        className="w-10 h-10 border border-outline-variant rounded-lg cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={draftBackground}
+                        onChange={(e) => setDraftBackground(e.target.value)}
+                        className="h-10 px-3 border border-outline-variant bg-surface rounded-xl text-xs font-mono text-on-surface uppercase w-32 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Custom Surface Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={draftSurface}
+                        onChange={(e) => setDraftSurface(e.target.value)}
+                        className="w-10 h-10 border border-outline-variant rounded-lg cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={draftSurface}
+                        onChange={(e) => setDraftSurface(e.target.value)}
+                        className="h-10 px-3 border border-outline-variant bg-surface rounded-xl text-xs font-mono text-on-surface uppercase w-32 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 sm:col-span-2">
+                    <label className="text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider">Custom Text Color</label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={draftText}
+                        onChange={(e) => setDraftText(e.target.value)}
+                        className="w-10 h-10 border border-outline-variant rounded-lg cursor-pointer bg-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={draftText}
+                        onChange={(e) => setDraftText(e.target.value)}
+                        className="h-10 px-3 border border-outline-variant bg-surface rounded-xl text-xs font-mono text-on-surface uppercase w-32 focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Preview Card (Right Column) */}
+              <div className="lg:col-span-5 flex flex-col gap-3 border border-outline-variant/60 rounded-xl p-4 shadow-sm"
+                style={{ backgroundColor: draftBackground }}
+              >
+                <div className="flex justify-between items-center pb-2 border-b border-dashed" style={{ borderColor: `${draftText}26` }}>
+                  <span className="text-[10px] font-bold uppercase tracking-wider font-mono" style={{ color: `${draftText}b3` }}>Live Theme Preview</span>
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: `${draftSecondary}33`, color: draftSecondary }}>Active Category</span>
+                </div>
+                
+                {/* Sample Header */}
+                <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ backgroundColor: draftSurface, borderColor: `${draftText}1f` }}>
+                  <div className="w-4 h-4 rounded-full" style={{ backgroundColor: draftPrimary }} />
+                  <span className="text-xs font-bold" style={{ color: draftText }}>Cohortix POS Preview</span>
+                </div>
+
+                {/* Sample Order Card */}
+                <div className="p-3.5 rounded-xl border space-y-2.5" style={{ backgroundColor: draftSurface, borderColor: `${draftText}1f` }}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-xs font-bold font-headline" style={{ color: draftText }}>#1024 - John Doe</h4>
+                      <p className="text-[9px]" style={{ color: `${draftText}99` }}>Ordered 3 mins ago</p>
+                    </div>
+                    <span className="text-xs font-black font-mono" style={{ color: draftText }}>₹150</span>
+                  </div>
+                  
+                  {/* Item tag */}
+                  <div className="flex items-center justify-between text-[10px] py-1 border-t" style={{ borderColor: `${draftText}15` }}>
+                    <span style={{ color: draftText }}>1x Special Pyali Gola</span>
+                    <span className="font-bold px-2 py-0.5 rounded text-[9px] uppercase tracking-wide" style={{ backgroundColor: `${draftPrimary}1a`, color: draftPrimary }}>
+                      Special
+                    </span>
+                  </div>
+
+                  <div className="pt-1 flex gap-2">
+                    <button type="button" className="flex-1 py-1.5 rounded-lg text-[10px] font-bold text-center text-white cursor-default" style={{ backgroundColor: draftPrimary }}>
+                      Done
+                    </button>
+                    <button type="button" className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-center border cursor-default bg-transparent" style={{ borderColor: draftSecondary, color: draftSecondary }}>
+                      Details
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Bar */}
+            <div className="pt-4 border-t border-outline-variant flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                {hasUnsavedThemeChanges ? (
+                  <span className="text-xs text-amber-600 font-bold flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Unsaved changes in custom colors (Previewing locally)
+                  </span>
+                ) : (
+                  <span className="text-xs text-emerald-600 font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    Custom theme synced
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraftPrimary(customPrimary);
+                    setDraftSecondary(customSecondary);
+                    setDraftBackground(customBackground);
+                    setDraftSurface(customSurface);
+                    setDraftText(customText);
+                  }}
+                  disabled={!hasUnsavedThemeChanges}
+                  className="px-4 h-10 border border-outline-variant bg-surface text-on-surface hover:bg-surface-container disabled:opacity-50 disabled:cursor-not-allowed font-bold rounded-xl text-xs transition-colors"
+                >
+                  Reset Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChangeCustomPrimary?.(draftPrimary);
+                    onChangeCustomSecondary?.(draftSecondary);
+                    onChangeCustomBackground?.(draftBackground);
+                    onChangeCustomSurface?.(draftSurface);
+                    onChangeCustomText?.(draftText);
+                  }}
+                  disabled={!hasUnsavedThemeChanges}
+                  className="flex-1 sm:flex-none bg-secondary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-on-secondary font-bold h-10 px-6 rounded-xl transition-all flex items-center justify-center gap-2 text-xs shadow-sm"
+                >
+                  <Save className="w-4 h-4" />
+                  Save & Apply Theme
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Offers & Discount Panel */}
@@ -817,7 +1192,10 @@ export function MenuManager({
                       : 'bg-surface text-on-surface-variant border-outline-variant hover:bg-surface-container'
                       }`}
                   >
-                    {CATEGORY_ICONS[cat] ?? '\u{1F361}'} {cat}
+                    <span className="flex items-center gap-1.5 justify-center">
+                      <CategoryIcon category={cat} className="w-3.5 h-3.5" />
+                      <span>{cat}</span>
+                    </span>
                   </button>
                 ))}
                 <button
@@ -840,7 +1218,7 @@ export function MenuManager({
                 {/* Stick / Dish row */}
                 <div className="bg-surface-container px-4 py-2 border-b border-outline-variant flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">🍡</span>
+                    <StickIcon className="w-4 h-4 text-secondary" />
                     <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider font-headline">
                       {stickAllowed ? 'Stick / Dish Option' : 'Dish Only'}
                     </span>
@@ -907,7 +1285,7 @@ export function MenuManager({
                 <div className={`transition-opacity ${hasDishPrice ? 'opacity-30 pointer-events-none bg-surface-container/20' : ''}`}>
                   <div className="bg-surface-container px-4 py-2 border-y border-outline-variant flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">🧊</span>
+                      <IceCubeIcon className="w-4 h-4 text-secondary" />
                       <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider font-headline">Dish Gola Variants</span>
                     </div>
                     {hasDishPrice && <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider">Clear "Dish Price" to edit variants</span>}
@@ -999,9 +1377,9 @@ export function MenuManager({
             <div key={category} className={`bg-surface-container-lowest rounded-xl shadow-sm border ${items.length === 0 ? 'border-dashed border-outline-variant/60 opacity-70' : 'border-outline-variant'} overflow-hidden`}>
               <div className="bg-surface-container px-4 py-3 border-b border-outline-variant flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <Tag className="w-4 h-4 text-secondary" />
-                  <h3 className="font-bold text-on-surface font-headline uppercase tracking-wider text-xs flex items-center gap-2">
-                    {CATEGORY_ICONS[category] ?? '\u{1F361}'} {category}
+                  <h3 className="font-bold text-on-surface font-headline uppercase tracking-wider text-xs flex items-center gap-1.5">
+                    <CategoryIcon category={category} className="w-4 h-4 text-secondary" />
+                    <span>{category}</span>
                     {items.length === 0 && <span className="text-[9px] bg-outline-variant text-on-surface-variant px-2 py-0.5 rounded-full font-bold font-mono">EMPTY</span>}
                   </h3>
                 </div>
@@ -1168,16 +1546,25 @@ export function MenuManager({
                           {item.hasVariants && (
                             <>
                               {!isStickRestrictedCategory(item.category) && item.price > 0 && (
-                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🍡 Stick: ₹{item.price}</span>
+                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60 inline-flex items-center gap-1">
+                                  <StickIcon className="w-3.5 h-3.5 text-secondary" />
+                                  <span>Stick: ₹{item.price}</span>
+                                </span>
                               )}
                               {((item.dishPrice && item.dishPrice > 0) || isStickRestrictedCategory(item.category)) && (
-                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🥣 Dish: ₹{item.dishPrice && item.dishPrice > 0 ? item.dishPrice : item.price}</span>
+                                <span className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60 inline-flex items-center gap-1">
+                                  <DishIcon className="w-3.5 h-3.5 text-secondary" />
+                                  <span>Dish: ₹{item.dishPrice && item.dishPrice > 0 ? item.dishPrice : item.price}</span>
+                                </span>
                               )}
                             </>
                           )}
                            {item.hasGolaVariants && item.golaVariantPrices &&
                             GOLA_VARIANTS.filter((v) => item.golaVariantPrices![v] > 0 && (v !== 'Stick' || !isStickRestrictedCategory(item.category))).map((v) => (
-                              <span key={v} className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🧊 {v}: ₹{item.golaVariantPrices![v]}</span>
+                              <span key={v} className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60 inline-flex items-center gap-1">
+                                <IceCubeIcon className="w-3.5 h-3.5 text-secondary" />
+                                <span>{v}: ₹{item.golaVariantPrices![v]}</span>
+                              </span>
                             ))
                           }
                           {!item.hasVariants && !item.hasGolaVariants && (

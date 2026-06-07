@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search, Sparkles, CupSoda, Layers, Flame, Banknote, Smartphone, Clock } from 'lucide-react';
 import {
   CartItem,
   GolaVariant,
@@ -45,7 +45,7 @@ const GOLA_VARIANT_COLORS: Record<GolaVariant, string> = {
   'Ice Cream Only': 'bg-pink-100 text-pink-700',
   'Dry Fruit Only': 'bg-amber-100 text-amber-700',
   'Ice Cream + Dry Fruit': 'bg-purple-100 text-purple-700',
-  'Plain': 'bg-slate-100 text-slate-600',
+  'Plain': 'bg-surface-container text-on-surface',
   'Stick': 'bg-teal-100 text-teal-700',
 };
 
@@ -95,13 +95,19 @@ function calculateOfferTotals(cart: CartItem[], pricingRule: PricingRule) {
   };
 }
 
-const getCategoryEmoji = (cat: string) => {
-  const norm = (cat || '').toLowerCase();
-  if (norm.includes('premium')) return '🍨';
-  if (norm.includes('special')) return '🍧';
-  if (norm.includes('pyali') || norm.includes('pyaali')) return '🍧';
-  return '🍢';
-};
+export function CategoryIcon({ category, className = "w-5 h-5" }: { category: string; className?: string }) {
+  const norm = (category || '').toLowerCase();
+  if (norm.includes('premium') || norm.includes('special dish')) {
+    return <Sparkles className={`${className} text-purple-500`} />;
+  }
+  if (norm.includes('special')) {
+    return <Flame className={`${className} text-orange-500`} />;
+  }
+  if (norm.includes('pyali') || norm.includes('pyaali')) {
+    return <CupSoda className={`${className} text-pink-500`} />;
+  }
+  return <Layers className={`${className} text-blue-500`} />;
+}
 
 interface QtyControlProps {
   quantity: number;
@@ -204,7 +210,7 @@ function CartContent({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-0 border border-outline-variant rounded-xl bg-surface-container-lowest m-4">
         {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
+          <div className="h-full flex flex-col items-center justify-center text-on-surface-variant/60 space-y-2 py-12">
             <ShoppingCart className="w-12 h-12 opacity-20 text-secondary" />
             <p className="font-medium text-sm">Cart is empty</p>
           </div>
@@ -212,14 +218,14 @@ function CartContent({
           cart.map((item) => (
             <div key={item.cartItemId} className="flex items-center justify-between p-3 border-b border-outline-variant last:border-0 bg-surface-container-lowest">
               <div className="flex items-start gap-2 flex-1 min-w-0">
-                <div className="w-10 h-10 rounded bg-surface-container-high flex items-center justify-center shrink-0">
-                  <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
+                  <CategoryIcon category={item.category} className="w-5 h-5" />
                 </div>
                 <div className="flex flex-col min-w-0">
                   <span className="font-body-md text-sm font-semibold text-on-surface truncate pr-1">
                     {item.name}
                   </span>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  <span className="text-[10px] text-on-surface-variant/80 font-bold uppercase tracking-wider mt-0.5">
                     {item.variant ?? 'Standard'}
                   </span>
                 </div>
@@ -227,11 +233,11 @@ function CartContent({
               <div className="flex flex-col items-end ml-2 shrink-0">
                 <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.calculatedPrice) * item.quantity}</span>
                 <div className="flex items-center gap-1.5 mt-1">
-                  <div className="flex items-center border border-outline-variant rounded-lg h-[30px] bg-white">
+                  <div className="flex items-center border border-outline-variant rounded-lg h-[30px] bg-surface-container-lowest">
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.cartItemId, -1)}
-                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-slate-100 rounded-l-lg transition-colors"
+                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-container-highest rounded-l-lg transition-colors"
                     >
                       <Minus className="w-3 h-3" />
                     </button>
@@ -239,7 +245,7 @@ function CartContent({
                     <button
                       type="button"
                       onClick={() => updateQuantity(item.cartItemId, 1)}
-                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-slate-100 rounded-r-lg transition-colors"
+                      className="w-[30px] h-full flex items-center justify-center text-on-surface-variant active:bg-surface-container-highest rounded-r-lg transition-colors"
                     >
                       <Plus className="w-3 h-3" />
                     </button>
@@ -280,7 +286,7 @@ function CartContent({
             placeholder="Customer Name (Optional)"
             value={customerName}
             onChange={(e) => onCustomerNameChange(e.target.value)}
-            className="w-full h-11 px-3 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white"
+            className="w-full h-11 px-3 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/60"
           />
         </div>
         <div className="mb-3">
@@ -290,7 +296,7 @@ function CartContent({
             onChange={(e) => onOrderInstructionsChange(e.target.value)}
             rows={2}
             maxLength={220}
-            className="w-full px-3 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white resize-none"
+            className="w-full px-3 py-2 border border-outline-variant rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/60 resize-none"
           />
         </div>
 
@@ -304,7 +310,7 @@ function CartContent({
                 : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
             }`}
           >
-            <span className="text-xl mb-1">💵</span>
+            <Banknote className="w-5.5 h-5.5 mb-1.5" />
             <span className="font-label-md text-xs">Cash</span>
             {paymentMethod === 'cash' && (
               <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
@@ -321,7 +327,7 @@ function CartContent({
                 : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
             }`}
           >
-            <span className="text-xl mb-1">📱</span>
+            <Smartphone className="w-5.5 h-5.5 mb-1.5" />
             <span className="font-label-md text-xs">UPI</span>
             {paymentMethod === 'upi' && (
               <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
@@ -338,7 +344,7 @@ function CartContent({
                 : 'border-outline-variant bg-surface text-on-surface-variant hover:bg-surface-container-low'
             }`}
           >
-            <span className="text-xl mb-1">🕒</span>
+            <Clock className="w-5.5 h-5.5 mb-1.5" />
             <span className="font-label-md text-xs">Later</span>
             {paymentMethod === 'pay_later' && (
               <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-secondary text-on-secondary rounded-full flex items-center justify-center shadow-sm">
@@ -349,13 +355,13 @@ function CartContent({
         </div>
 
         {paymentMethod === 'upi' && (
-          <div className="flex flex-col items-center justify-center p-4 bg-white border border-outline-variant rounded-xl mb-4 shadow-sm">
-            <p className="text-sm text-slate-500 font-medium">Scan QR to pay ₹{total}</p>
+          <div className="flex flex-col items-center justify-center p-4 bg-surface border border-outline-variant rounded-xl mb-4 shadow-sm">
+            <p className="text-sm text-on-surface-variant font-medium">Scan QR to pay ₹{total}</p>
           </div>
         )}
 
         <div className="mb-4 px-1 space-y-1.5">
-          <div className="flex justify-between text-sm text-slate-500">
+          <div className="flex justify-between text-sm text-on-surface-variant">
             <span>Subtotal</span>
             <span className="font-mono">₹{subtotal}</span>
           </div>
@@ -378,8 +384,8 @@ function CartContent({
             </div>
           )}
           <div className="flex justify-between items-end pt-1">
-            <span className="text-slate-600 font-semibold">Total Amount</span>
-            <span className="text-3xl font-bold text-slate-800 font-headline">₹{total}</span>
+            <span className="text-on-surface-variant font-semibold">Total Amount</span>
+            <span className="text-3xl font-bold text-on-surface font-headline">₹{total}</span>
           </div>
         </div>
 
@@ -393,7 +399,7 @@ function CartContent({
           type="button"
           onClick={onCheckout}
           disabled={cart.length === 0 || orderPending || updatePending}
-          className="w-full h-[52px] bg-secondary hover:opacity-90 disabled:bg-slate-300 disabled:cursor-not-allowed text-on-secondary py-3 rounded-xl font-bold text-base uppercase tracking-wider transition-all shadow-sm active:scale-[0.98] btn-checkout flex items-center justify-center gap-2"
+          className="w-full h-[52px] bg-secondary hover:opacity-90 disabled:bg-surface-container-highest disabled:text-on-surface-variant/30 disabled:cursor-not-allowed text-on-secondary py-3 rounded-xl font-bold text-base uppercase tracking-wider transition-all shadow-sm active:scale-[0.98] btn-checkout flex items-center justify-center gap-2"
         >
           {isEditing
             ? (updatePending ? 'Updating Order...' : `Update Order #${editingOrderNumber ?? ''}`)
@@ -772,14 +778,14 @@ export function NewOrder({
               placeholder="Search items by name or category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-11 pl-11 pr-10 border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-white shadow-sm"
+              className="w-full h-11 pl-11 pr-10 border border-outline-variant rounded-full focus:outline-none focus:ring-2 focus:ring-secondary text-sm bg-surface-container-lowest text-on-surface placeholder:text-on-surface-variant/60 shadow-sm"
             />
-            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-3.5" />
+            <Search className="w-4 h-4 text-on-surface-variant/60 absolute left-4 top-3.5" />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-3 h-5 w-5 rounded-full flex items-center justify-center hover:bg-slate-100 text-slate-400"
+                className="absolute right-3.5 top-3 h-5 w-5 rounded-full flex items-center justify-center hover:bg-surface-container-high text-on-surface-variant/60"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -824,7 +830,7 @@ export function NewOrder({
               if (items.length === 0) return null;
               return (
                 <div key={category}>
-                  <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider font-headline">
+                  <h3 className="text-sm font-bold text-on-surface-variant/80 mb-4 uppercase tracking-wider font-headline">
                     {category}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -856,12 +862,12 @@ export function NewOrder({
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 {!hasPhoto && (
                                   <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                                    <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                    <CategoryIcon category={item.category} className="w-5 h-5" />
                                   </div>
                                 )}
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
-                                  <div className="text-slate-500 text-[10px] font-medium mt-0.5 leading-tight break-words pr-2 truncate">
+                                  <div className="font-bold text-on-surface text-sm truncate">{item.name}</div>
+                                  <div className="text-on-surface-variant text-[10px] font-medium mt-0.5 leading-tight break-words pr-2 truncate">
                                     {itemGolaVariants.map(v => `${v}: ₹${discountUnitPrice(item.golaVariantPrices?.[v] ?? item.price)}`).join(' · ')}
                                   </div>
                                 </div>
@@ -872,22 +878,22 @@ export function NewOrder({
                                     {totalQty}
                                   </div>
                                 )}
-                                <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
+                                <div className={`text-on-surface-variant/60 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
                                   <ChevronDown className="w-4 h-4" />
                                 </div>
                               </div>
                             </div>
 
                             {isExpanded && (
-                              <div className="bg-slate-50/80 p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
+                              <div className="bg-surface-container-low p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
                                 {itemGolaVariants.map((v) => {
                                   const qty = getCartQuantity(item.id, v);
                                   const price = item.golaVariantPrices?.[v] ?? item.price;
                                   return (
-                                    <div key={v} className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
+                                    <div key={v} className="flex justify-between items-center bg-surface-container-lowest p-2 rounded-lg border border-outline-variant/40">
                                       <div className="min-w-0 flex-1">
                                         <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded ${GOLA_VARIANT_COLORS[v]}`}>{v}</span>
-                                        <span className="block text-[11px] font-bold text-slate-500 mt-0.5">₹{discountUnitPrice(price)}</span>
+                                        <span className="block text-[11px] font-bold text-on-surface-variant mt-0.5">₹{discountUnitPrice(price)}</span>
                                       </div>
                                       <QuantityControl
                                         quantity={qty}
@@ -933,10 +939,10 @@ export function NewOrder({
                               )}
                               {hasPhoto ? (
                                 <div className="p-3 flex-1 flex flex-col justify-between gap-2">
-                                  <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                                  <div className="font-bold text-on-surface text-xs line-clamp-2">{item.name}</div>
                                   <div className="flex justify-between items-end gap-1.5 mt-auto">
                                     <div className="flex flex-col">
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase">Stick</span>
+                                      <span className="text-[10px] text-on-surface-variant/80 font-bold uppercase">Stick</span>
                                       <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
                                     </div>
                                     <QuantityControl
@@ -950,12 +956,12 @@ export function NewOrder({
                                 <div className="p-3 w-full flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                                      <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                      <CategoryIcon category={item.category} className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
-                                      <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                      <div className="font-bold text-on-surface text-sm truncate">{item.name}</div>
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Stick</span>
+                                        <span className="text-[10px] text-on-surface-variant/80 font-bold uppercase">Stick</span>
                                         <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
                                       </div>
                                     </div>
@@ -991,10 +997,10 @@ export function NewOrder({
                               )}
                               {hasPhoto ? (
                                 <div className="p-3 flex-1 flex flex-col justify-between gap-2">
-                                  <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                                  <div className="font-bold text-on-surface text-xs line-clamp-2">{item.name}</div>
                                   <div className="flex justify-between items-end gap-1.5 mt-auto">
                                     <div className="flex flex-col">
-                                      <span className="text-[10px] text-slate-400 font-bold uppercase">Dish</span>
+                                      <span className="text-[10px] text-on-surface-variant/80 font-bold uppercase">Dish</span>
                                       <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(dishOnlyPrice)}</span>
                                     </div>
                                     <QuantityControl
@@ -1008,12 +1014,12 @@ export function NewOrder({
                                 <div className="p-3 w-full flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-3 min-w-0">
                                     <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                                      <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                      <CategoryIcon category={item.category} className="w-5 h-5" />
                                     </div>
                                     <div className="min-w-0">
-                                      <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                      <div className="font-bold text-on-surface text-sm truncate">{item.name}</div>
                                       <div className="flex items-center gap-2 mt-0.5">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase">Dish</span>
+                                        <span className="text-[10px] text-on-surface-variant/80 font-bold uppercase">Dish</span>
                                         <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(dishOnlyPrice)}</span>
                                       </div>
                                     </div>
@@ -1049,12 +1055,12 @@ export function NewOrder({
                               <div className="flex items-center gap-3 min-w-0 flex-1">
                                 {!hasPhoto && (
                                   <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                                    <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                    <CategoryIcon category={item.category} className="w-5 h-5" />
                                   </div>
                                 )}
                                 <div className="min-w-0 flex-1">
-                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
-                                  <div className="text-slate-500 text-[10px] font-medium mt-0.5">
+                                  <div className="font-bold text-on-surface text-sm truncate">{item.name}</div>
+                                  <div className="text-on-surface-variant text-[10px] font-medium mt-0.5">
                                     Stick: ₹{discountUnitPrice(item.price)} · Dish: ₹{discountUnitPrice(dishOnlyPrice)}
                                   </div>
                                 </div>
@@ -1065,18 +1071,18 @@ export function NewOrder({
                                     {totalQty}
                                   </div>
                                 )}
-                                <div className={`text-slate-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
+                                <div className={`text-on-surface-variant/60 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-secondary' : ''}`}>
                                   <ChevronDown className="w-4 h-4" />
                                 </div>
                               </div>
                             </div>
 
                             {isExpanded && (
-                              <div className="bg-slate-50/80 p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
-                                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
+                              <div className="bg-surface-container-low p-3 border-t border-outline-variant space-y-2.5 rounded-b-xl">
+                                <div className="flex justify-between items-center bg-surface-container-lowest p-2 rounded-lg border border-outline-variant/40">
                                   <div>
-                                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Stick</span>
-                                    <span className="text-xs font-bold text-slate-700">₹{discountUnitPrice(item.price)}</span>
+                                    <span className="block text-[10px] font-bold text-on-surface-variant/80 uppercase">Stick</span>
+                                    <span className="text-xs font-bold text-on-surface">₹{discountUnitPrice(item.price)}</span>
                                   </div>
                                   <QuantityControl
                                     quantity={stickQty}
@@ -1084,10 +1090,10 @@ export function NewOrder({
                                     onRemove={() => handleRemove(item, 'Stick')}
                                   />
                                 </div>
-                                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-outline-variant/40">
+                                <div className="flex justify-between items-center bg-surface-container-lowest p-2 rounded-lg border border-outline-variant/40">
                                   <div>
-                                    <span className="block text-[10px] font-bold text-slate-500 uppercase">Dish</span>
-                                    <span className="text-xs font-bold text-slate-700">₹{discountUnitPrice(dishOnlyPrice)}</span>
+                                    <span className="block text-[10px] font-bold text-on-surface-variant/80 uppercase">Dish</span>
+                                    <span className="text-xs font-bold text-on-surface">₹{discountUnitPrice(dishOnlyPrice)}</span>
                                   </div>
                                   <QuantityControl
                                     quantity={dishQty}
@@ -1120,7 +1126,7 @@ export function NewOrder({
                           )}
                           {hasPhoto ? (
                             <div className="p-3 flex-1 flex flex-col justify-between gap-2">
-                              <div className="font-bold text-slate-800 text-xs line-clamp-2">{item.name}</div>
+                              <div className="font-bold text-on-surface text-xs line-clamp-2">{item.name}</div>
                               <div className="flex justify-between items-end gap-1.5 mt-auto">
                                 <span className="font-headline text-sm font-bold text-primary">₹{discountUnitPrice(item.price)}</span>
                                 {qty === 0 ? (
@@ -1144,10 +1150,10 @@ export function NewOrder({
                             <div className="p-3 w-full flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center shrink-0">
-                                  <span className="text-xl">{getCategoryEmoji(item.category)}</span>
+                                  <CategoryIcon category={item.category} className="w-5 h-5" />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="font-bold text-slate-800 text-sm truncate">{item.name}</div>
+                                  <div className="font-bold text-on-surface text-sm truncate">{item.name}</div>
                                   <span className="font-headline text-sm font-bold text-primary block mt-0.5">₹{discountUnitPrice(item.price)}</span>
                                 </div>
                               </div>
@@ -1184,7 +1190,7 @@ export function NewOrder({
 
 
       {/* Cart Section (Desktop) */}
-      <div className="hidden md:flex w-96 bg-white rounded-2xl shadow-sm border border-outline-variant flex-col h-[calc(100vh-8rem)] sticky top-4">
+      <div className="hidden md:flex w-96 bg-surface-container-lowest rounded-2xl shadow-sm border border-outline-variant flex-col h-[calc(100vh-8rem)] sticky top-4">
         <CartContent {...cartContentCommonProps} />
       </div>
 
@@ -1216,18 +1222,18 @@ export function NewOrder({
           onClick={() => setShowMobileCart(false)}
         >
           <div
-            className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-2xl max-h-[92vh] min-h-[65vh] flex flex-col pb-safe"
+            className="absolute inset-x-0 bottom-0 bg-surface-container-lowest rounded-t-3xl shadow-2xl max-h-[92vh] min-h-[65vh] flex flex-col pb-safe"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="pt-2 pb-1 flex justify-center">
-              <div className="h-1.5 w-12 rounded-full bg-slate-300" />
+              <div className="h-1.5 w-12 rounded-full bg-outline-variant" />
             </div>
-            <div className="flex justify-between items-center px-4 py-3 bg-white border-b border-outline-variant shrink-0">
+            <div className="flex justify-between items-center px-4 py-3 bg-surface-container-lowest border-b border-outline-variant shrink-0">
               <h2 className="text-base font-bold text-primary font-headline">Your Order</h2>
               <button
                 type="button"
                 onClick={() => setShowMobileCart(false)}
-                className="h-10 w-10 flex items-center justify-center bg-slate-100 text-slate-600 rounded-full active:scale-95 transition-transform touch-manipulation"
+                className="h-10 w-10 flex items-center justify-center bg-surface-container-high text-on-surface-variant rounded-full active:scale-95 transition-transform touch-manipulation"
               >
                 <X className="w-5 h-5" />
               </button>

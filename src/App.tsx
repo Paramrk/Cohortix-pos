@@ -14,7 +14,32 @@ import { showLocalNotification } from './lib/pushNotifications';
 
 type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
-const COHORTIX_LOGO_SRC = `${import.meta.env.BASE_URL}cohortix/logo-name-lightheme.png`;
+
+const COHORTIX_LIGHT_LOGO = `${import.meta.env.BASE_URL}cohortix/logo-name-lightheme.png`;
+const COHORTIX_DARK_LOGO = `${import.meta.env.BASE_URL}cohortix/darktheme-logo-name.png`;
+
+const DARK_THEMES = new Set([
+  'theme-dark',
+  'theme-eclipse',
+  'theme-abyss',
+  'theme-carbon',
+  'theme-emerald-night',
+  'theme-rose-noir',
+]);
+
+function isColorDark(hex: string) {
+  if (!hex || hex[0] !== '#') return false;
+  const cleanHex = hex.length === 4 
+    ? '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3]
+    : hex;
+  const rgb = parseInt(cleanHex.substring(1), 16);
+  if (isNaN(rgb)) return false;
+  const r = (rgb >> 16) & 0xff;
+  const g = (rgb >> 8) & 0xff;
+  const b = (rgb >> 0) & 0xff;
+  const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luma < 140;
+}
 
 interface NavButtonProps {
   tab: Tab;
@@ -38,7 +63,7 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
       className={`flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all relative scale-98 active:scale-95 duration-150 ${
         isActive
           ? 'bg-secondary-container text-on-secondary-container rounded-full px-4 py-1.5 my-1.5 md:my-0 md:rounded-none md:bg-transparent md:border-b-2 md:border-secondary md:text-secondary md:px-6 md:py-4 md:flex-1'
-          : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 py-3 md:py-4 px-2 md:px-6 md:flex-1'
+          : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container py-3 md:py-4 px-2 md:px-6 md:flex-1'
       }`}
     >
       <div className="relative">
@@ -71,14 +96,148 @@ export default function App() {
     }
   });
 
+  const [customPrimary, setCustomPrimary] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_custom_primary') || '#000000';
+    } catch {
+      return '#000000';
+    }
+  });
+
+  const [customSecondary, setCustomSecondary] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_custom_secondary') || '#006c49';
+    } catch {
+      return '#006c49';
+    }
+  });
+
+  const [customBackground, setCustomBackground] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_custom_background') || '#f8f9ff';
+    } catch {
+      return '#f8f9ff';
+    }
+  });
+
+  const [customSurface, setCustomSurface] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_custom_surface') || '#ffffff';
+    } catch {
+      return '#ffffff';
+    }
+  });
+
+  const [customText, setCustomText] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_custom_text') || '#0b1c30';
+    } catch {
+      return '#0b1c30';
+    }
+  });
+
+  const isDark = theme === 'theme-custom'
+    ? isColorDark(customBackground)
+    : DARK_THEMES.has(theme);
+
+  const logoSrc = isDark ? COHORTIX_DARK_LOGO : COHORTIX_LIGHT_LOGO;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_custom_primary', customPrimary);
+    } catch {}
+  }, [customPrimary]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_custom_secondary', customSecondary);
+    } catch {}
+  }, [customSecondary]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_custom_background', customBackground);
+    } catch {}
+  }, [customBackground]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_custom_surface', customSurface);
+    } catch {}
+  }, [customSurface]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_custom_text', customText);
+    } catch {}
+  }, [customText]);
+
   useEffect(() => {
     try {
       localStorage.setItem('pos_theme', theme);
     } catch {}
     const doc = document.documentElement;
-    doc.classList.remove('theme-default', 'theme-ocean', 'theme-sunset', 'theme-dark');
+    doc.classList.remove(
+      'theme-default',
+      'theme-ocean',
+      'theme-sunset',
+      'theme-lavender',
+      'theme-forest',
+      'theme-dark',
+      'theme-nordic',
+      'theme-rose',
+      'theme-amber',
+      'theme-plum',
+      'theme-charcoal',
+      'theme-crimson',
+      'theme-sage',
+      'theme-steel',
+      'theme-terracotta',
+      'theme-sakura',
+      'theme-citrus',
+      'theme-midnight',
+      'theme-eclipse',
+      'theme-abyss',
+      'theme-carbon',
+      'theme-emerald-night',
+      'theme-rose-noir',
+      'theme-custom'
+    );
     doc.classList.add(theme);
-  }, [theme]);
+
+    if (theme === 'theme-custom') {
+      doc.style.setProperty('--primary', customPrimary);
+      doc.style.setProperty('--secondary', customSecondary);
+      doc.style.setProperty('--primary-container', `${customPrimary}1a`);
+      doc.style.setProperty('--on-primary-container', customPrimary);
+      doc.style.setProperty('--secondary-container', `${customSecondary}33`);
+      doc.style.setProperty('--on-secondary-container', customSecondary);
+      
+      doc.style.setProperty('--background', customBackground);
+      doc.style.setProperty('--surface', customBackground);
+      doc.style.setProperty('--surface-container-lowest', customSurface);
+      doc.style.setProperty('--surface-container', customSurface);
+      doc.style.setProperty('--on-surface', customText);
+      doc.style.setProperty('--on-background', customText);
+      doc.style.setProperty('--on-surface-variant', `${customText}b3`); // 70% opacity
+      doc.style.setProperty('--outline-variant', `${customText}26`); // 15% opacity
+    } else {
+      doc.style.removeProperty('--primary');
+      doc.style.removeProperty('--secondary');
+      doc.style.removeProperty('--primary-container');
+      doc.style.removeProperty('--on-primary-container');
+      doc.style.removeProperty('--secondary-container');
+      doc.style.removeProperty('--on-secondary-container');
+      doc.style.removeProperty('--background');
+      doc.style.removeProperty('--surface');
+      doc.style.removeProperty('--surface-container-lowest');
+      doc.style.removeProperty('--surface-container');
+      doc.style.removeProperty('--on-surface');
+      doc.style.removeProperty('--on-background');
+      doc.style.removeProperty('--on-surface-variant');
+      doc.style.removeProperty('--outline-variant');
+    }
+  }, [theme, customPrimary, customSecondary, customBackground, customSurface, customText]);
 
   const [orderAlertsEnabled, setOrderAlertsEnabled] = useState<boolean>(() => {
     try {
@@ -359,12 +518,12 @@ export default function App() {
             <div className="flex items-center gap-2">
               <div className="bg-surface-container-lowest p-1.5 rounded-lg border border-outline-variant shadow-sm">
                 <img
-                  src={COHORTIX_LOGO_SRC}
+                  src={logoSrc}
                   alt="Cohortix logo"
                   className="h-8 w-auto object-contain"
                 />
               </div>
-              <h1 className="text-xl font-bold text-slate-800 tracking-tight">Cohortix POS</h1>
+              <h1 className="text-xl font-bold text-on-surface tracking-tight">Cohortix POS</h1>
             </div>
             <div className="flex items-center gap-2">
               <nav className="flex space-x-2">
@@ -386,7 +545,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => { void handleSignOut(); }}
-                className="h-10 px-3 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 flex items-center gap-2 text-sm font-semibold"
+                className="h-10 px-3 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container flex items-center gap-2 text-sm font-semibold"
               >
                 <LogOut className="w-4 h-4" />
                 Sign Out
@@ -403,12 +562,12 @@ export default function App() {
         <div className="flex items-center gap-2 px-3 h-14">
           <div className="bg-surface-container-lowest p-1 rounded-lg border border-outline-variant shadow-sm shrink-0">
             <img
-              src={COHORTIX_LOGO_SRC}
+              src={logoSrc}
               alt="Cohortix logo"
               className="h-7 w-auto object-contain"
             />
           </div>
-          <h1 className="text-base font-bold text-slate-800 tracking-tight flex-1 min-w-0 truncate">Cohortix POS</h1>
+          <h1 className="text-base font-bold text-on-surface tracking-tight flex-1 min-w-0 truncate">Cohortix POS</h1>
           {canInstallApp && (
             <button
               type="button"
@@ -422,7 +581,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => { void handleSignOut(); }}
-            className="h-8 w-8 rounded-lg border border-slate-200 text-slate-600 flex items-center justify-center shrink-0"
+            className="h-8 w-8 rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container flex items-center justify-center shrink-0"
             aria-label="Sign out"
           >
             <LogOut className="w-4 h-4" />
@@ -524,6 +683,16 @@ export default function App() {
             onUpdatePricingRule={updatePricingRule}
             theme={theme}
             onChangeTheme={setTheme}
+            customPrimary={customPrimary}
+            onChangeCustomPrimary={setCustomPrimary}
+            customSecondary={customSecondary}
+            onChangeCustomSecondary={setCustomSecondary}
+            customBackground={customBackground}
+            onChangeCustomBackground={setCustomBackground}
+            customSurface={customSurface}
+            onChangeCustomSurface={setCustomSurface}
+            customText={customText}
+            onChangeCustomText={setCustomText}
           />
         )}
       </main>
@@ -531,7 +700,7 @@ export default function App() {
       <footer className="hidden md:block bg-surface border-t border-outline-variant py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
-            src={COHORTIX_LOGO_SRC}
+            src={logoSrc}
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />

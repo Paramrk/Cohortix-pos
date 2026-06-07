@@ -206,7 +206,7 @@ export function Dashboard({
     [analyticsOrders],
   );
   const activeOrders = useMemo(
-    () => sortedOrders.filter((order) => order.status !== 'cancelled'),
+    () => sortedOrders.filter((order) => order.status !== 'cancelled' && order.status !== 'canceled'),
     [sortedOrders],
   );
   const sortedExpenses = useMemo(
@@ -259,11 +259,25 @@ export function Dashboard({
     return breakdown;
   }, [activeOrders]);
 
-  const flowBreakdown = useMemo(() => ({
-    pending: sortedOrders.filter((order) => order.status === 'pending').length,
-    completed: sortedOrders.filter((order) => order.status === 'completed').length,
-    cancelled: sortedOrders.filter((order) => order.status === 'cancelled').length,
-  }), [sortedOrders]);
+  const flowBreakdown = useMemo(() => {
+    const pending = sortedOrders.filter((order) => order.status === 'pending');
+    const completed = sortedOrders.filter((order) => order.status === 'completed');
+    const cancelled = sortedOrders.filter((order) => order.status === 'cancelled' || order.status === 'canceled');
+    return {
+      pending: {
+        count: pending.length,
+        total: pending.reduce((sum, o) => sum + o.total, 0),
+      },
+      completed: {
+        count: completed.length,
+        total: completed.reduce((sum, o) => sum + o.total, 0),
+      },
+      cancelled: {
+        count: cancelled.length,
+        total: cancelled.reduce((sum, o) => sum + o.total, 0),
+      },
+    };
+  }, [sortedOrders]);
 
   const sourceBreakdown = useMemo(() => {
     const source = { pos: 0, customer: 0, unknown: 0 };
@@ -661,21 +675,27 @@ export function Dashboard({
               <CircleDot className="w-4 h-4 text-orange-500" />
               <span className="text-xs font-semibold">Pending</span>
             </div>
-            <span className="text-xs font-bold text-orange-600 font-mono">{flowBreakdown.pending}</span>
+            <span className="text-xs font-bold text-orange-600 font-mono">
+              {flowBreakdown.pending.count} ({formatCurrency(flowBreakdown.pending.total)})
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
             <div className="flex items-center gap-2 text-on-surface-variant">
               <ClipboardCheck className="w-4 h-4 text-secondary" />
               <span className="text-xs font-semibold">Completed</span>
             </div>
-            <span className="text-xs font-bold text-secondary font-mono">{flowBreakdown.completed}</span>
+            <span className="text-xs font-bold text-secondary font-mono">
+              {flowBreakdown.completed.count} ({formatCurrency(flowBreakdown.completed.total)})
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-rose-200/60 bg-rose-50/50 p-3">
             <div className="flex items-center gap-2 text-rose-700">
               <TrendingDown className="w-4 h-4 text-rose-500" />
               <span className="text-xs font-semibold">Cancelled</span>
             </div>
-            <span className="text-xs font-bold text-rose-600 font-mono">{flowBreakdown.cancelled}</span>
+            <span className="text-xs font-bold text-rose-600 font-mono">
+              {flowBreakdown.cancelled.count} ({formatCurrency(flowBreakdown.cancelled.total)})
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
             <span className="text-xs font-semibold text-on-surface-variant">POS Orders</span>
