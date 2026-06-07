@@ -1206,10 +1206,17 @@ export function NewOrder({
     return count;
   }, [visibleCategories, categoryItemsMap]);
 
+  const hasMobileCartBar = cart.length > 0 && !showMobileCart;
+  const popupMarginClass = hasMobileCartBar ? 'mobile-ai-popup-margin-with-cart' : 'mb-3';
+
   return (
     <div className="flex flex-col md:flex-row gap-4 md:gap-6 relative">
       {/* Menu Section */}
-      <div className={`flex-1 ${cart.length > 0 && !showMobileCart ? 'pb-36' : 'pb-4'} md:pb-0`}>
+      <div className={`flex-1 ${
+        cart.length > 0 && !showMobileCart
+          ? (showVoiceAssistant ? 'pb-56' : 'pb-36')
+          : (showVoiceAssistant ? 'pb-32' : 'pb-4')
+      } md:pb-0`}>
         {isEditing && editingOrder && (
           <div className="mb-4 rounded-xl border border-secondary bg-secondary-container/10 px-3 py-2.5 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-secondary">Editing Order #{editingOrder.orderNumber}</p>
@@ -1662,7 +1669,9 @@ export function NewOrder({
 
       {/* Mobile Bottom Cart Bar */}
       {cart.length > 0 && !showMobileCart && (
-        <div className="md:hidden fixed left-0 right-0 p-4 mobile-floating-offset z-40">
+        <div className={`md:hidden fixed left-0 right-0 p-4 z-40 transition-all duration-300 ${
+          showVoiceAssistant ? 'mobile-cart-bar-offset-with-ai' : 'mobile-floating-offset'
+        }`}>
           <button
             className="w-full bg-secondary text-on-secondary shadow-[0_8px_16px_rgba(0,108,73,0.25),inset_0_2px_4px_rgba(255,255,255,0.2)] rounded-full h-14 flex items-center justify-between px-6 active:scale-98 transition-transform duration-150 pointer-events-auto"
             onClick={() => setShowMobileCart(true)}
@@ -1711,7 +1720,7 @@ export function NewOrder({
         </div>
       )}
       {showVoiceAssistant && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-4xl px-4 pointer-events-none">
+        <div className="fixed mobile-ai-bar-offset left-1/2 -translate-x-1/2 z-50 w-[95%] max-w-4xl px-4 pointer-events-none transition-all duration-300">
           <style>{`
             @keyframes pulse-ring {
               0% { transform: scale(0.95); opacity: 0.5; }
@@ -1734,7 +1743,7 @@ export function NewOrder({
           
           {/* Expanded Chat History Interface */}
           {showChatHistory ? (
-            <div className="mb-3 bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[350px] flex flex-col w-full transition-all duration-300">
+            <div className={`${popupMarginClass} bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[350px] flex flex-col w-full transition-all duration-300`}>
               <div className="flex justify-between items-center pb-2 border-b border-slate-800 shrink-0">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Conversation History</span>
                 <button
@@ -1770,7 +1779,7 @@ export function NewOrder({
           ) : (
             /* Small Popup for current message response directly above the Pill */
             (voiceReply || voiceTranscript) && (
-              <div className="mb-3 bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[200px] overflow-y-auto w-full transition-all duration-300">
+              <div className={`${popupMarginClass} bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[200px] overflow-y-auto w-full transition-all duration-300`}>
                 {voiceTranscript && (
                   <div className="mb-2 text-xs text-slate-300 flex items-start gap-1">
                     <span className="font-bold text-indigo-400 shrink-0">You:</span>
@@ -1787,44 +1796,114 @@ export function NewOrder({
             )
           )}
           
-          <div className="bg-slate-900/95 text-white backdrop-blur-md border border-slate-700/60 shadow-2xl rounded-full px-5 py-3.5 flex items-center justify-between gap-4 pointer-events-auto w-full transition-all duration-300">
+          <div className="bg-slate-900/95 text-white backdrop-blur-md border border-slate-700/60 shadow-2xl rounded-3xl p-3 md:rounded-full md:px-5 md:py-3.5 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-4 pointer-events-auto w-full transition-all duration-300">
             
-            {/* Left: Pulse Mic & Status */}
-            <div className="flex items-center gap-3 shrink-0">
-              <button
-                type="button"
-                onClick={isListening ? handleStopConversation : startListening}
-                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-md relative z-10 transition-all ${
-                  isListening
-                    ? 'bg-rose-500 hover:bg-rose-600 ring-4 ring-rose-500/30 font-bold'
-                    : 'bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 active:scale-95'
-                }`}
-              >
-                {isListening ? (
-                  <MicOff className="w-4 h-4 text-white" />
-                ) : (
-                  <Mic className="w-4 h-4 text-white animate-pulse" />
-                )}
-                {isListening && (
-                  <span className="absolute inset-0 rounded-full border-4 border-rose-500/40 animate-pulse-ring" />
-                )}
-              </button>
+            {/* Row 2 Wrapper on Mobile / contents on Desktop */}
+            <div className="flex items-center justify-between w-full md:w-auto md:contents order-2 md:order-none gap-2">
               
-              {isListening && (
-                <div className="flex items-end gap-1 h-6 shrink-0">
-                  <span className="w-1 bg-violet-400 rounded-full soundwave-bar-1" style={{ height: '6px' }} />
-                  <span className="w-1 bg-indigo-400 rounded-full soundwave-bar-2" style={{ height: '6px' }} />
-                  <span className="w-1 bg-fuchsia-400 rounded-full soundwave-bar-3" style={{ height: '6px' }} />
-                </div>
-              )}
+              {/* Left: Pulse Mic & Status */}
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0 md:order-1">
+                <button
+                  type="button"
+                  onClick={isListening ? handleStopConversation : startListening}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center shadow-md relative z-10 transition-all ${
+                    isListening
+                      ? 'bg-rose-500 hover:bg-rose-600 ring-4 ring-rose-500/30 font-bold'
+                      : 'bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600 active:scale-95'
+                  }`}
+                >
+                  {isListening ? (
+                    <MicOff className="w-4 h-4 text-white" />
+                  ) : (
+                    <Mic className="w-4 h-4 text-white animate-pulse" />
+                  )}
+                  {isListening && (
+                    <span className="absolute inset-0 rounded-full border-4 border-rose-500/40 animate-pulse-ring" />
+                  )}
+                </button>
+                
+                {isListening && (
+                  <div className="flex items-end gap-1 h-6 shrink-0">
+                    <span className="w-1 bg-violet-400 rounded-full soundwave-bar-1" style={{ height: '6px' }} />
+                    <span className="w-1 bg-indigo-400 rounded-full soundwave-bar-2" style={{ height: '6px' }} />
+                    <span className="w-1 bg-fuchsia-400 rounded-full soundwave-bar-3" style={{ height: '6px' }} />
+                  </div>
+                )}
 
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                {isListening ? 'Listening' : voiceLoading ? 'Processing' : 'Voice Assistant'}
-              </span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hidden min-[360px]:inline">
+                  {isListening ? 'Listening' : voiceLoading ? 'Processing' : 'Voice Assistant'}
+                </span>
+              </div>
+
+              {/* Right: Cart Status, Language Switcher, Controls & Close */}
+              <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 md:order-3">
+                {/* Mini Cart summary preview */}
+                <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/50 text-[11px] font-bold font-mono">
+                  <span>🛒 {totalItems} items</span>
+                  <span className="text-indigo-300">₹{total}</span>
+                </div>
+
+                {/* Language buttons */}
+                <div className="flex gap-0.5 bg-slate-800/60 p-0.5 rounded-lg text-[10px]">
+                  {(['en', 'gu', 'hi'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => selectLanguage(lang)}
+                      className={`px-1.5 py-0.5 rounded font-bold transition-all uppercase ${
+                        voiceLanguage === lang
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {lang === 'en' ? 'EN' : lang === 'gu' ? 'GU' : 'HI'}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Chat Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowChatHistory(!showChatHistory)}
+                  className={`rounded-full p-1.5 hover:bg-slate-800 transition-colors ${
+                    showChatHistory ? 'text-indigo-400 bg-slate-850' : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Toggle Chat History"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                </button>
+
+                {/* TTS toggler */}
+                <button
+                  type="button"
+                  onClick={() => setTtsEnabled(!ttsEnabled)}
+                  className="rounded-full p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                  title={ttsEnabled ? 'Mute synthesis' : 'Unmute synthesis'}
+                >
+                  {ttsEnabled ? (
+                    <Volume2 className="w-4 h-4 text-indigo-400" />
+                  ) : (
+                    <VolumeX className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Close */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleStopConversation();
+                    setShowVoiceAssistant(false);
+                  }}
+                  className="rounded-full p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-slate-300 hover:text-white"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
             </div>
 
             {/* Center: Live Ticker / Transcript Preview */}
-            <div className="flex-1 min-w-0 bg-slate-950/40 rounded-full py-1.5 px-4 border border-slate-800/60 flex items-center gap-2">
+            <div className="w-full md:flex-1 min-w-0 bg-slate-950/40 rounded-full py-1.5 px-4 border border-slate-800/60 flex items-center gap-2 order-1 md:order-2">
               <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0" />
               <div className="flex-1 min-w-0 text-xs">
                 {voiceTranscript ? (
@@ -1847,71 +1926,6 @@ export function NewOrder({
               </div>
             </div>
 
-            {/* Right: Cart Status, Language Switcher, Controls & Close */}
-            <div className="flex items-center gap-3 shrink-0">
-              {/* Mini Cart summary preview */}
-              <div className="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-3 py-1 rounded-full border border-slate-700/50 text-[11px] font-bold font-mono">
-                <span>🛒 {totalItems} items</span>
-                <span className="text-indigo-300">₹{total}</span>
-              </div>
-
-              {/* Language buttons */}
-              <div className="flex gap-0.5 bg-slate-800/60 p-0.5 rounded-lg text-[10px]">
-                {(['en', 'gu', 'hi'] as const).map((lang) => (
-                  <button
-                    key={lang}
-                    type="button"
-                    onClick={() => selectLanguage(lang)}
-                    className={`px-1.5 py-0.5 rounded font-bold transition-all uppercase ${
-                      voiceLanguage === lang
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {lang === 'en' ? 'EN' : lang === 'gu' ? 'GU' : 'HI'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Chat Toggle */}
-              <button
-                type="button"
-                onClick={() => setShowChatHistory(!showChatHistory)}
-                className={`rounded-full p-1.5 hover:bg-slate-800 transition-colors ${
-                  showChatHistory ? 'text-indigo-400 bg-slate-850' : 'text-slate-400 hover:text-white'
-                }`}
-                title="Toggle Chat History"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
-
-              {/* TTS toggler */}
-              <button
-                type="button"
-                onClick={() => setTtsEnabled(!ttsEnabled)}
-                className="rounded-full p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                title={ttsEnabled ? 'Mute synthesis' : 'Unmute synthesis'}
-              >
-                {ttsEnabled ? (
-                  <Volume2 className="w-4 h-4 text-indigo-400" />
-                ) : (
-                  <VolumeX className="w-4 h-4" />
-                )}
-              </button>
-
-              {/* Close */}
-              <button
-                type="button"
-                onClick={() => {
-                  handleStopConversation();
-                  setShowVoiceAssistant(false);
-                }}
-                className="rounded-full p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-slate-300 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
           </div>
         </div>
       )}

@@ -879,6 +879,31 @@
     bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.75rem);
   }
 
+  /* Position floating AI assistant above bottom nav on mobile, standard on desktop */
+  .mobile-ai-bar-offset {
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 0.5rem);
+  }
+  @media (min-width: 768px) {
+    .mobile-ai-bar-offset {
+      bottom: 1.5rem; /* bottom-6 */
+    }
+  }
+
+  /* Position floating cart bar above AI assistant on mobile when it is open */
+  .mobile-cart-bar-offset-with-ai {
+    bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 5.25rem);
+  }
+
+  /* Extra margin for AI popup to clear floating cart bar on mobile */
+  .mobile-ai-popup-margin-with-cart {
+    margin-bottom: 4.75rem; /* ~76px */
+  }
+  @media (min-width: 768px) {
+    .mobile-ai-popup-margin-with-cart {
+      margin-bottom: 0.75rem; /* mb-3 */
+    }
+  }
+
   /* Hide scrollbar for category row */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
