@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download } from 'lucide-react';
+import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download, Sparkles } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
 import { NewOrder } from './components/NewOrder';
@@ -83,6 +83,7 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
+  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -620,6 +621,8 @@ export default function App() {
             orderPending={orderPending}
             orderError={orderError}
             onClearOrderError={clearOrderError}
+            showVoiceAssistant={showVoiceAssistant}
+            setShowVoiceAssistant={setShowVoiceAssistant}
           />
         )}
         {activeTab === 'queue' && (
@@ -717,6 +720,21 @@ export default function App() {
         <NavButton tab="dashboard" icon={BarChart3} label="Stats" activeTab={activeTab} onSelect={setActiveTab} />
         <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
       </nav>
+
+      {/* Global Animated AI Assistant Floating Button */}
+      {!showVoiceAssistant && (
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('new-order');
+            setShowVoiceAssistant(true);
+          }}
+          className="fixed z-40 right-6 md:right-8 bottom-20 md:bottom-8 w-14 h-14 rounded-full bg-gradient-to-r from-violet-600 via-indigo-600 to-fuchsia-600 text-white flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all duration-300 group overflow-hidden animate-ai-button cursor-pointer"
+          title="Open AI Assistant"
+        >
+          <Sparkles className="w-6 h-6 text-white group-hover:rotate-12 transition-transform duration-300" />
+        </button>
+      )}
 
       {incomingOrderNotification && orderAlertsEnabled && (
         <button

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search, Sparkles, CupSoda, Layers, Flame, Banknote, Smartphone, Clock, Mic, MicOff, Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { Plus, Minus, ShoppingCart, Trash2, ChevronDown, ChevronRight, X, QrCode, Search, Sparkles, CupSoda, Layers, Flame, Banknote, Smartphone, Clock, Mic, MicOff, Volume2, VolumeX, Loader2, MessageSquare, ShoppingBag } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import {
   CartItem,
@@ -22,6 +22,8 @@ interface NewOrderProps {
   orderPending: boolean;
   orderError: string | null;
   onClearOrderError: () => void;
+  showVoiceAssistant: boolean;
+  setShowVoiceAssistant: (show: boolean) => void;
 }
 
 interface PosDraftOrderV1 {
@@ -165,6 +167,8 @@ interface CartContentProps {
   onOrderInstructionsChange: (value: string) => void;
   onPaymentMethodChange: (method: 'cash' | 'upi' | 'pay_later') => void;
   onCheckout: () => void;
+  isParcel: boolean;
+  onToggleParcel: () => void;
 }
 
 function CartContent({
@@ -194,6 +198,8 @@ function CartContent({
   onOrderInstructionsChange,
   onPaymentMethodChange,
   onCheckout,
+  isParcel,
+  onToggleParcel,
 }: CartContentProps) {
   return (
     <>
@@ -301,6 +307,29 @@ function CartContent({
           />
         </div>
 
+        <div className="mb-4 flex items-center justify-between p-3 border border-outline-variant rounded-xl bg-surface">
+          <div className="flex items-center gap-2">
+            <ShoppingBag className="w-5 h-5 text-on-surface-variant/80" />
+            <div>
+              <span className="text-sm font-semibold text-on-surface">Mark as Parcel</span>
+              <span className="block text-[10px] text-on-surface-variant">Adds ₹5 parcel charge</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleParcel}
+            className={`relative inline-flex h-6 w-11 rounded-full transition-colors duration-200 focus:outline-none cursor-pointer ${
+              isParcel ? 'bg-secondary' : 'bg-outline-variant/60'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200 ${
+                isParcel ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </div>
+
         <div className="flex gap-2 mb-4">
           <button
             type="button"
@@ -384,6 +413,12 @@ function CartContent({
               <span className="font-mono">-₹{percentDiscountAmount}</span>
             </div>
           )}
+          {isParcel && (
+            <div className="flex justify-between text-sm text-on-surface-variant font-semibold">
+              <span>Parcel Charge</span>
+              <span className="font-mono">₹5</span>
+            </div>
+          )}
           <div className="flex justify-between items-end pt-1">
             <span className="text-on-surface-variant font-semibold">Total Amount</span>
             <span className="text-3xl font-bold text-on-surface font-headline">₹{total}</span>
@@ -448,11 +483,14 @@ export function NewOrder({
   orderPending,
   orderError,
   onClearOrderError,
+  showVoiceAssistant,
+  setShowVoiceAssistant,
 }: NewOrderProps) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [orderInstructions, setOrderInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi' | 'pay_later'>('cash');
+  const [isParcel, setIsParcel] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [showMobileCart, setShowMobileCart] = useState(false);
   const [updatePending, setUpdatePending] = useState(false);
@@ -461,7 +499,6 @@ export function NewOrder({
   const [searchQuery, setSearchQuery] = useState('');
 
   // Voice Assistant State
-  const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const showVoiceAssistantRef = useRef(showVoiceAssistant);
   useEffect(() => {
     showVoiceAssistantRef.current = showVoiceAssistant;
@@ -493,6 +530,29 @@ export function NewOrder({
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [showChatHistory, setShowChatHistory] = useState(false);
+  const isSpeakingRef = useRef(false);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const hasParcel = /\b(parcel|take\s*away|takeaway)\b/i.test(orderInstructions);
+    setIsParcel(hasParcel);
+  }, [orderInstructions]);
+
+  const handleToggleParcel = () => {
+    let nextInstructions = orderInstructions.trim();
+    const currentlyParcel = /\b(parcel|take\s*away|takeaway)\b/i.test(nextInstructions);
+    
+    if (currentlyParcel) {
+      nextInstructions = nextInstructions
+        .split('\n')
+        .filter((line) => !/\b(parcel|take\s*away|takeaway)\b/i.test(line))
+        .join('\n');
+    } else {
+      nextInstructions = nextInstructions ? `Parcel\n${nextInstructions}` : 'Parcel';
+    }
+    setOrderInstructions(nextInstructions);
+  };
 
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
@@ -557,7 +617,11 @@ export function NewOrder({
     };
   }, [voiceLanguage]);
 
-  const startListening = () => {
+  const startListening = useCallback(() => {
+    if (isSpeakingRef.current) {
+      console.log('Aborting startListening: AI is currently speaking.');
+      return;
+    }
     setVoiceTranscript('');
     setVoiceError(null);
     try {
@@ -569,9 +633,9 @@ export function NewOrder({
     } catch (err) {
       console.error('Failed to start speech recognition', err);
     }
-  };
+  }, []);
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
     try {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -579,10 +643,78 @@ export function NewOrder({
     } catch (err) {
       console.error('Failed to stop speech recognition', err);
     }
+  }, []);
+
+  const handleStopConversation = useCallback(() => {
+    stopListening();
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+      activeAudioRef.current = null;
+    }
+    isSpeakingRef.current = false;
+    setVoiceLoading(false);
+  }, [stopListening]);
+
+  useEffect(() => {
+    if (showVoiceAssistant) {
+      startListening();
+    } else {
+      handleStopConversation();
+    }
+  }, [showVoiceAssistant, startListening, handleStopConversation]);
+
+  const speakWithSarvam = async (text: string, apiKey: string, onEndCallback?: () => void) => {
+    isSpeakingRef.current = true;
+    try {
+      const response = await fetch('https://api.sarvam.ai/text-to-speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-subscription-key': apiKey,
+        },
+        body: JSON.stringify({
+          text,
+          target_language_code: 'gu-IN',
+          speaker_name: 'shubh',
+          model: 'bulbul:v3',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sarvam AI TTS status: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data?.audios?.[0]) {
+        const audioUrl = `data:audio/wav;base64,${data.audios[0]}`;
+        const audio = new Audio(audioUrl);
+        activeAudioRef.current = audio;
+        audio.onplay = () => {
+          stopListening();
+        };
+        audio.onended = () => {
+          isSpeakingRef.current = false;
+          activeAudioRef.current = null;
+          if (onEndCallback) onEndCallback();
+        };
+        await audio.play();
+      } else {
+        throw new Error('No audio returned from Sarvam AI');
+      }
+    } catch (err) {
+      isSpeakingRef.current = false;
+      activeAudioRef.current = null;
+      console.error('Sarvam AI TTS failed, falling back to Web Speech API', err);
+      speakWithWebSpeech(text, 'gu', onEndCallback);
+    }
   };
 
-  const speakText = (text: string, lang: 'en' | 'gu', onEndCallback?: () => void) => {
+  const speakWithWebSpeech = (text: string, lang: 'en' | 'gu', onEndCallback?: () => void) => {
     if ('speechSynthesis' in window) {
+      isSpeakingRef.current = true;
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang === 'gu' ? 'gu-IN' : 'en-US';
@@ -591,12 +723,28 @@ export function NewOrder({
       if (matchVoice) {
         utterance.voice = matchVoice;
       }
-      if (onEndCallback) {
-        utterance.onend = () => {
+      utterance.onend = () => {
+        isSpeakingRef.current = false;
+        if (onEndCallback) {
           onEndCallback();
-        };
-      }
+        }
+      };
+      utterance.onerror = () => {
+        isSpeakingRef.current = false;
+        if (onEndCallback) {
+          onEndCallback();
+        }
+      };
       window.speechSynthesis.speak(utterance);
+    }
+  };
+
+  const speakText = (text: string, lang: 'en' | 'gu', onEndCallback?: () => void) => {
+    const sarvamApiKey = import.meta.env.VITE_SARVAM_API_KEY || '';
+    if (lang === 'gu' && sarvamApiKey) {
+      void speakWithSarvam(text, sarvamApiKey, onEndCallback);
+    } else {
+      speakWithWebSpeech(text, lang, onEndCallback);
     }
   };
 
@@ -610,7 +758,8 @@ export function NewOrder({
     const nextPaymentStatus: 'paid' | 'unpaid' = finalPayment === 'pay_later' ? 'unpaid' : 'paid';
     const { subtotal: s, subtotalAfterOffer: sa } = calculateOfferTotals(finalCart, pricingRule);
     const percentDiscountAmount = Math.round((sa * pricingRule.discountPercent) / 100);
-    const finalTotal = Math.max(0, sa - percentDiscountAmount);
+    const voiceHasParcel = /\b(parcel|take\s*away|takeaway)\b/i.test(finalInstructions);
+    const finalTotal = Math.max(0, sa - percentDiscountAmount) + (voiceHasParcel ? 5 : 0);
 
     const payload = {
       customerName: finalName.trim() || 'Guest',
@@ -750,7 +899,6 @@ export function NewOrder({
             speakText(confirmMsg, voiceLanguage === 'gu' ? 'gu' : 'en');
           }
           await placeVoiceOrder(finalCart, nextName || customerName, nextInstructions || orderInstructions, nextPayment || paymentMethod);
-          setShowVoiceAssistant(false);
         }
       }
     } catch (err) {
@@ -926,7 +1074,7 @@ export function NewOrder({
   const activeOfferLabel = offerLabel(pricingRule.bogoType);
   const { subtotal, subtotalAfterOffer, offerSavings, freeUnits } = calculateOfferTotals(cart, pricingRule);
   const percentDiscountAmount = Math.round((subtotalAfterOffer * pricingRule.discountPercent) / 100);
-  const total = Math.max(0, subtotalAfterOffer - percentDiscountAmount);
+  const total = Math.max(0, subtotalAfterOffer - percentDiscountAmount) + (isParcel ? 5 : 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
   const isEditing = Boolean(editingOrder);
 
@@ -1043,6 +1191,8 @@ export function NewOrder({
     onOrderInstructionsChange: (value) => { onClearOrderError(); setOrderInstructions(value); },
     onPaymentMethodChange: (method) => { onClearOrderError(); setPaymentMethod(method); },
     onCheckout: () => { void handleCheckout(); },
+    isParcel,
+    onToggleParcel: handleToggleParcel,
   };
 
 
@@ -1582,13 +1732,68 @@ export function NewOrder({
             .soundwave-bar-5 { animation: soundwave-bar 0.9s infinite ease-in-out 0.05s; }
           `}</style>
           
+          {/* Expanded Chat History Interface */}
+          {showChatHistory ? (
+            <div className="mb-3 bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[350px] flex flex-col w-full transition-all duration-300">
+              <div className="flex justify-between items-center pb-2 border-b border-slate-800 shrink-0">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Conversation History</span>
+                <button
+                  type="button"
+                  onClick={() => setShowChatHistory(false)}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-bold"
+                >
+                  Minimize
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto space-y-3 py-3 text-xs pr-1">
+                {voiceHistory.length === 0 ? (
+                  <p className="text-slate-500 italic text-center py-4">No messages yet.</p>
+                ) : (
+                  voiceHistory.map((msg, index) => (
+                    <div
+                      key={index}
+                      className={`flex flex-col max-w-[85%] ${
+                        msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'
+                      }`}
+                    >
+                      <span className={`text-[10px] font-bold mb-0.5 ${msg.role === 'user' ? 'text-indigo-400' : 'text-violet-400'}`}>
+                        {msg.role === 'user' ? 'You' : 'AI'}
+                      </span>
+                      <div className={`p-2.5 rounded-xl text-slate-100 ${msg.role === 'user' ? 'bg-indigo-600/50' : 'bg-slate-800 border border-slate-700/40'}`}>
+                        <p className="whitespace-pre-line">{msg.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Small Popup for current message response directly above the Pill */
+            (voiceReply || voiceTranscript) && (
+              <div className="mb-3 bg-slate-900/95 text-white border border-slate-700/60 rounded-2xl p-4 shadow-2xl pointer-events-auto max-h-[200px] overflow-y-auto w-full transition-all duration-300">
+                {voiceTranscript && (
+                  <div className="mb-2 text-xs text-slate-300 flex items-start gap-1">
+                    <span className="font-bold text-indigo-400 shrink-0">You:</span>
+                    <span className="italic">"{voiceTranscript}"</span>
+                  </div>
+                )}
+                {voiceReply && (
+                  <div className="text-sm text-slate-100 flex items-start gap-1">
+                    <span className="font-bold text-violet-400 shrink-0">AI:</span>
+                    <p className="font-medium whitespace-pre-line">{voiceReply}</p>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+          
           <div className="bg-slate-900/95 text-white backdrop-blur-md border border-slate-700/60 shadow-2xl rounded-full px-5 py-3.5 flex items-center justify-between gap-4 pointer-events-auto w-full transition-all duration-300">
             
             {/* Left: Pulse Mic & Status */}
             <div className="flex items-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={isListening ? stopListening : startListening}
+                onClick={isListening ? handleStopConversation : startListening}
                 className={`w-10 h-10 rounded-full flex items-center justify-center shadow-md relative z-10 transition-all ${
                   isListening
                     ? 'bg-rose-500 hover:bg-rose-600 ring-4 ring-rose-500/30 font-bold'
@@ -1668,6 +1873,18 @@ export function NewOrder({
                 ))}
               </div>
 
+              {/* Chat Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowChatHistory(!showChatHistory)}
+                className={`rounded-full p-1.5 hover:bg-slate-800 transition-colors ${
+                  showChatHistory ? 'text-indigo-400 bg-slate-850' : 'text-slate-400 hover:text-white'
+                }`}
+                title="Toggle Chat History"
+              >
+                <MessageSquare className="w-4 h-4" />
+              </button>
+
               {/* TTS toggler */}
               <button
                 type="button"
@@ -1686,7 +1903,7 @@ export function NewOrder({
               <button
                 type="button"
                 onClick={() => {
-                  stopListening();
+                  handleStopConversation();
                   setShowVoiceAssistant(false);
                 }}
                 className="rounded-full p-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 transition-all text-slate-300 hover:text-white"
