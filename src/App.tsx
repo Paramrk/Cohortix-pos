@@ -63,6 +63,23 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [appInstalled, setAppInstalled] = useState(false);
+  const [theme, setTheme] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pos_theme') || 'theme-default';
+    } catch {
+      return 'theme-default';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('pos_theme', theme);
+    } catch {}
+    const doc = document.documentElement;
+    doc.classList.remove('theme-default', 'theme-ocean', 'theme-sunset', 'theme-dark');
+    doc.classList.add(theme);
+  }, [theme]);
+
   const [orderAlertsEnabled, setOrderAlertsEnabled] = useState<boolean>(() => {
     try {
       const raw = localStorage.getItem(ORDER_ALERTS_ENABLED_STORAGE_KEY);
@@ -278,10 +295,10 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-500 text-sm font-medium">Checking staff session...</p>
+          <p className="text-on-surface-variant text-sm font-medium">Checking staff session...</p>
         </div>
       </div>
     );
@@ -295,10 +312,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="w-10 h-10 border-4 border-secondary border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-500 text-sm font-medium">Loading Cohortix POS...</p>
+          <p className="text-on-surface-variant text-sm font-medium">Loading Cohortix POS...</p>
         </div>
       </div>
     );
@@ -334,13 +351,13 @@ export default function App() {
   const canInstallApp = Boolean(installPromptEvent) && !appInstalled;
 
   return (
-    <div className="min-h-dvh bg-slate-50 flex flex-col font-sans overflow-x-hidden">
+    <div className="min-h-dvh bg-background flex flex-col font-sans overflow-x-hidden">
       {/* Header (Desktop) */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 hidden md:block">
+      <header className="bg-surface border-b border-outline-variant sticky top-0 z-10 hidden md:block">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-2">
-              <div className="bg-white p-1.5 rounded-lg border border-slate-200 shadow-sm">
+              <div className="bg-surface-container-lowest p-1.5 rounded-lg border border-outline-variant shadow-sm">
                 <img
                   src={COHORTIX_LOGO_SRC}
                   alt="Cohortix logo"
@@ -380,11 +397,11 @@ export default function App() {
       </header>
 
       {/* Mobile Header */}
-      <header className="bg-white border-b border-slate-200 md:hidden sticky top-0 z-10 shadow-sm"
+      <header className="bg-surface border-b border-outline-variant md:hidden sticky top-0 z-10 shadow-sm"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <div className="flex items-center gap-2 px-3 h-14">
-          <div className="bg-white p-1 rounded-lg border border-slate-200 shadow-sm shrink-0">
+          <div className="bg-surface-container-lowest p-1 rounded-lg border border-outline-variant shadow-sm shrink-0">
             <img
               src={COHORTIX_LOGO_SRC}
               alt="Cohortix logo"
@@ -414,7 +431,7 @@ export default function App() {
       </header>
 
       {serviceAlerts.length > 0 && (
-        <div className="border-b border-slate-200 bg-white/90 backdrop-blur-sm">
+        <div className="border-b border-outline-variant bg-surface/90 backdrop-blur-sm">
           <div className="max-w-7xl mx-auto w-full p-3 sm:px-6 lg:px-8 space-y-2">
             {serviceAlerts.map((alert) => (
               <div
@@ -505,23 +522,25 @@ export default function App() {
             onDelete={deleteMenuItem}
             pricingRule={pricingRule}
             onUpdatePricingRule={updatePricingRule}
+            theme={theme}
+            onChangeTheme={setTheme}
           />
         )}
       </main>
 
-      <footer className="hidden md:block bg-white border-t border-slate-200 py-4">
+      <footer className="hidden md:block bg-surface border-t border-outline-variant py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-center gap-3">
           <img
             src={COHORTIX_LOGO_SRC}
             alt="Cohortix"
             className="h-6 w-auto object-contain"
           />
-          <span className="text-xs font-medium text-slate-500">Powered by Cohortix</span>
+          <span className="text-xs font-medium text-on-surface-variant">Powered by Cohortix</span>
         </div>
       </footer>
 
       {/* Bottom Navigation (Mobile) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-start z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-outline-variant flex justify-around items-start z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <NavButton tab="new-order" icon={Store} label="Order" activeTab={activeTab} onSelect={setActiveTab} />

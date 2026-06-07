@@ -12,6 +12,8 @@ interface MenuManagerProps {
   onDelete: (id: string) => void;
   pricingRule: PricingRule;
   onUpdatePricingRule: (next: Partial<PricingRule>) => Promise<void>;
+  theme?: string;
+  onChangeTheme?: (theme: string) => void;
 }
 
 const GOLA_VARIANTS: GolaVariant[] = ['Ice Cream Only', 'Dry Fruit Only', 'Ice Cream + Dry Fruit', 'Plain', 'Stick'];
@@ -130,6 +132,8 @@ export function MenuManager({
   onDelete,
   pricingRule,
   onUpdatePricingRule,
+  theme = 'theme-default',
+  onChangeTheme,
 }: MenuManagerProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm());
@@ -619,6 +623,38 @@ export function MenuManager({
         </div>
       )}
 
+      {/* App Theme / Color Schema Panel */}
+      <div className="bg-surface-container-lowest p-5 rounded-xl shadow-sm border border-outline-variant space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-on-surface uppercase tracking-wider font-headline">App Theme (Color Schema)</h3>
+          <p className="text-xs text-on-surface-variant mt-1">
+            Choose a color schema to personalize the POS interface.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full">
+          {[
+            { id: 'theme-default', name: 'Default Emerald', color: 'bg-[#006c49]' },
+            { id: 'theme-ocean', name: 'Ocean Splash', color: 'bg-[#0284c7]' },
+            { id: 'theme-sunset', name: 'Sunset Glow', color: 'bg-[#ea580c]' },
+            { id: 'theme-dark', name: 'Classic Dark', color: 'bg-[#10b981]' },
+          ].map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onChangeTheme?.(t.id)}
+              className={`flex items-center gap-2 px-4 h-12 rounded-xl text-xs font-bold border transition-all scale-98 active:scale-95 text-left cursor-pointer ${
+                theme === t.id
+                  ? 'bg-secondary-container text-on-secondary-container border-transparent shadow-sm ring-2 ring-secondary'
+                  : 'bg-surface text-on-surface border-outline-variant hover:bg-surface-container'
+              }`}
+            >
+              <span className={`w-3.5 h-3.5 rounded-full shrink-0 ${t.color}`} />
+              <span className="truncate">{t.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Offers & Discount Panel */}
       <div className="bg-surface-container-lowest p-5 rounded-xl shadow-sm border border-outline-variant space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -877,7 +913,7 @@ export function MenuManager({
                     {hasDishPrice && <span className="text-[9px] text-rose-600 font-bold uppercase tracking-wider">Clear "Dish Price" to edit variants</span>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-outline-variant/40">
-                    {GOLA_VARIANTS.map((v) => (
+                    {GOLA_VARIANTS.filter((v) => v !== 'Stick' || !isStickRestrictedCategory(form.category)).map((v) => (
                       <div key={v} className="bg-surface-container-lowest p-4">
                         <label className="block text-[10px] font-mono font-bold text-on-surface-variant uppercase tracking-wider mb-1">{v} (₹)</label>
                         <input
@@ -902,7 +938,7 @@ export function MenuManager({
                         onChange={(e) => setForm({ ...form, defaultGolaVariant: e.target.value as GolaVariant })}
                         className="w-full h-10 px-3 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
                       >
-                        {GOLA_VARIANTS.map((v) => (
+                        {GOLA_VARIANTS.filter((v) => v !== 'Stick' || !isStickRestrictedCategory(form.category)).map((v) => (
                           <option key={v} value={v}>
                             {v}
                           </option>
@@ -1026,7 +1062,7 @@ export function MenuManager({
                         className="border border-outline-variant rounded-lg px-2 py-1 focus:ring-1 focus:ring-secondary outline-none text-xs font-bold text-on-surface bg-surface"
                       >
                         <option value="" disabled>-- Select Variant --</option>
-                        {GOLA_VARIANTS.map((v) => (
+                        {GOLA_VARIANTS.filter((v) => v !== 'Stick' || !isStickRestrictedCategory(category)).map((v) => (
                           <option key={v} value={v}>
                             {v}
                           </option>
@@ -1093,7 +1129,7 @@ export function MenuManager({
                             />
                           </div>
                           {item.hasGolaVariants && form.golaVariantPrices &&
-                            GOLA_VARIANTS.map((v) => (
+                            GOLA_VARIANTS.filter((v) => v !== 'Stick' || !isStickRestrictedCategory(form.category)).map((v) => (
                               <div key={v} className="col-span-2">
                                 <label className="block text-[9px] font-mono font-bold text-on-surface-variant mb-1 uppercase tracking-wider truncate" title={v}>
                                   {v} (₹)
@@ -1139,8 +1175,8 @@ export function MenuManager({
                               )}
                             </>
                           )}
-                          {item.hasGolaVariants && item.golaVariantPrices &&
-                            GOLA_VARIANTS.filter((v) => item.golaVariantPrices![v] > 0).map((v) => (
+                           {item.hasGolaVariants && item.golaVariantPrices &&
+                            GOLA_VARIANTS.filter((v) => item.golaVariantPrices![v] > 0 && (v !== 'Stick' || !isStickRestrictedCategory(item.category))).map((v) => (
                               <span key={v} className="bg-surface px-1.5 py-0.5 rounded border border-outline-variant/60">🧊 {v}: ₹{item.golaVariantPrices![v]}</span>
                             ))
                           }
