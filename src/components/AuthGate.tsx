@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Lock, Users, ShieldAlert, ArrowLeft, Delete, ArrowRight, Edit2, Mail, KeyRound } from 'lucide-react';
+import { Lock, Users, ShieldAlert, ArrowLeft, Delete, ArrowRight, Edit2 } from 'lucide-react';
 import type { StaffMember } from '../types';
 import type { Session } from '@supabase/supabase-js';
 
@@ -22,41 +22,44 @@ export function AuthGate({
   isClosable = false,
   onCancel,
 }: AuthGateProps) {
-  const [activeTab, setActiveTab] = useState<'pin' | 'email'>(session ? 'pin' : 'email');
+  // Navigation Steps: username (Step 1) -> pin or password (Step 2)
+  const [step, setStep] = useState<'username' | 'credential'>('username');
+  const [usernameOrEmail, setUsernameOrEmail] = useState('');
   
   // PIN Login States
-  const [pinStep, setPinStep] = useState<'username' | 'pin'>('username');
-  const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
   // Email Login States
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState(false);
 
   const hasOwners = staffMembers.some((s) => s.role === 'owner');
+  const isEmailInput = usernameOrEmail.includes('@') && usernameOrEmail.includes('.');
 
-  // Reset states when switching tabs or mounting
+  // Reset states when mounting or locking
   useEffect(() => {
     setPin('');
-    setPinStep('username');
+    setPassword('');
     setPinError(null);
     setEmailError(null);
-    setSigningIn(false);
-  }, [activeTab]);
+    setStep('username');
+  }, []);
 
-  // Handle PIN Step 1 Username validation
-  const handlePinNextStep = useCallback(() => {
-    const trimmed = username.trim();
+  // Handle Username / Email validation (Step 1 -> Step 2 transition)
+  const handleNextStep = useCallback(() => {
+    const trimmed = usernameOrEmail.trim();
     if (!trimmed) {
-      setPinError('Please enter your Username.');
+      setPinError('Please enter your Username or Email.');
       return;
     }
     setPinError(null);
-    setPinStep('pin');
-  }, [username]);
+    setEmailError(null);
+    setPin('');
+    setPassword('');
+    setStep('credential');
+  }, [usernameOrEmail]);
 
   // Handle PIN entry
   const handlePinKeyPress = useCallback((num: string) => {
@@ -67,11 +70,11 @@ export function AuthGate({
       
       // Auto-submit when length reaches 4
       if (nextPin.length === 4) {
-        const trimmedUser = username.trim();
+        const trimmedUser = usernameOrEmail.trim();
         if (!trimmedUser) {
           setPinError('Please enter your Username first.');
           setPin('');
-          setPinStep('username');
+          setStep('username');
           return;
         }
 
@@ -79,15 +82,15 @@ export function AuthGate({
         if (success) {
           setPinError(null);
           setPin('');
-          setUsername('');
-          setPinStep('username');
+          setUsernameOrEmail('');
+          setStep('username');
         } else {
           setPinError('Invalid Username or PIN.');
           setPin('');
         }
       }
     }
-  }, [pin, username, onPinAuthenticate]);
+  }, [pin, usernameOrEmail, onPinAuthenticate]);
 
   const handlePinBackspace = useCallback(() => {
     setPinError(null);
@@ -101,9 +104,9 @@ export function AuthGate({
     setPin('');
   }, []);
 
-  // Listen to physical keyboard events in the PIN step
+  // Listen to physical keyboard events in the PIN step (only if not email mode)
   useEffect(() => {
-    if (activeTab !== 'pin' || pinStep !== 'pin') return;
+    if (step !== 'credential' || isEmailInput) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.activeElement?.tagName === 'INPUT') return;
@@ -113,7 +116,7 @@ export function AuthGate({
       } else if (e.key === 'Backspace') {
         handlePinBackspace();
       } else if (e.key === 'Escape') {
-        setPinStep('username');
+        setStep('username');
         setPin('');
         setPinError(null);
       }
@@ -123,15 +126,15 @@ export function AuthGate({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeTab, pinStep, handlePinKeyPress, handlePinBackspace]);
+  }, [step, isEmailInput, handlePinKeyPress, handlePinBackspace]);
 
   // Handle Email & Password Login
   const handleEmailSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
-    const identifier = email.trim();
+    const identifier = usernameOrEmail.trim();
     const passwordValue = password.trim();
-    if (!identifier || !passwordValue) {
-      setEmailError('Enter your email and password.');
+    if (!passwordValue) {
+      setEmailError('Enter your password.');
       return;
     }
 
@@ -147,7 +150,7 @@ export function AuthGate({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-fade-in">
       <div className="w-full max-w-md bg-surface border border-outline-variant/60 rounded-3xl shadow-2xl overflow-hidden flex flex-col relative">
         
         {/* Header decoration */}
@@ -160,125 +163,144 @@ export function AuthGate({
             POS Staff Authentication
           </h2>
           <p className="text-xs text-on-surface-variant mt-1.5 max-w-[280px]">
-            {!session && activeTab === 'pin'
-              ? "Offline Mode: Enter PIN to unlock locally, or switch to Admin tab to connect database."
-              : "Verify your credentials to access the POS terminal operations."
+            {!session && step === 'username'
+              ? "Offline Mode: Connect database by entering Admin email, or log in locally with PIN."
+              : "Enter your username/email and credentials to unlock the terminal."
             }
           </p>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex border-b border-outline-variant/30 bg-surface-container/20">
-          <button
-            type="button"
-            onClick={() => setActiveTab('pin')}
-            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-b-2 ${
-              activeTab === 'pin'
-                ? 'border-secondary text-secondary bg-surface-container/10'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            <KeyRound className="w-4 h-4" />
-            Staff PIN Login
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('email')}
-            className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-b-2 ${
-              activeTab === 'email'
-                ? 'border-secondary text-secondary bg-surface-container/10'
-                : 'border-transparent text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            <Mail className="w-4 h-4" />
-            Admin Email Login
-          </button>
-        </div>
-
-        {/* Tab 1: Staff PIN Login */}
-        {activeTab === 'pin' && (
+        {/* STEP 1: Enter Username or Email */}
+        {step === 'username' && (
           <div className="flex flex-col">
             {/* Offline warning banner if session is null */}
             {!session && (
               <div className="mx-6 mt-4 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-center">
                 <p className="text-[10px] font-semibold text-amber-500 leading-tight">
-                  Offline Mode: Database sync inactive. Please log in as Admin to connect.
+                  Offline Mode: Database sync inactive. Log in using email to restore sync.
                 </p>
               </div>
             )}
 
-            {pinStep === 'username' ? (
-              <div className="flex flex-col">
-                <div className="px-8 pt-5">
-                  <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1 flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-secondary" /> Username
+            <div className="px-8 pt-6">
+              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1 flex items-center gap-1">
+                <Users className="w-3.5 h-3.5 text-secondary" /> Username or Email
+              </label>
+              <input
+                type="text"
+                value={usernameOrEmail}
+                onChange={(e) => {
+                  setPinError(null);
+                  setUsernameOrEmail(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleNextStep();
+                  }
+                }}
+                placeholder="Enter username or email"
+                className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface font-mono"
+                autoComplete="off"
+                autoFocus
+              />
+            </div>
+
+            <div className="h-6 px-8 mt-2">
+              {pinError && (
+                <p className="text-xs font-semibold text-error flex items-center gap-1">
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {pinError}
+                </p>
+              )}
+            </div>
+
+            <div className="px-8 pb-6">
+              <button
+                type="button"
+                onClick={handleNextStep}
+                className="w-full h-11 bg-primary text-on-primary hover:bg-primary/90 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm text-sm"
+              >
+                Continue
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: Enter PIN or Password */}
+        {step === 'credential' && (
+          <div className="flex flex-col">
+            {/* Active Username Indicator */}
+            <div className="px-8 pt-6">
+              <div className="flex justify-between items-center bg-surface-container/40 border border-outline-variant/30 rounded-xl p-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-secondary" />
+                  <div className="text-left">
+                    <p className="text-[10px] uppercase tracking-wider text-on-surface-variant font-mono">
+                      {isEmailInput ? 'Admin Email' : 'Staff Username'}
+                    </p>
+                    <p className="text-sm font-bold text-on-surface font-mono truncate max-w-[200px]" title={usernameOrEmail}>
+                      {usernameOrEmail}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('username');
+                    setPin('');
+                    setPassword('');
+                    setPinError(null);
+                    setEmailError(null);
+                  }}
+                  className="p-1 rounded-lg hover:bg-surface-container text-secondary hover:text-secondary/80 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer border border-transparent hover:border-outline-variant/30"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit
+                </button>
+              </div>
+            </div>
+
+            {isEmailInput ? (
+              /* Email Password Input View */
+              <form onSubmit={handleEmailSignIn} className="px-8 pt-4 pb-6 space-y-4">
+                <div>
+                  <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">
+                    Password
                   </label>
                   <input
-                    type="text"
-                    value={username}
+                    type="password"
+                    value={password}
                     onChange={(e) => {
-                      setPinError(null);
-                      setUsername(e.target.value);
+                      setEmailError(null);
+                      setPassword(e.target.value);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        handlePinNextStep();
-                      }
-                    }}
-                    placeholder="Enter username (e.g. owner)"
-                    className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface font-mono"
-                    autoComplete="off"
+                    placeholder="Enter your password"
+                    className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
+                    autoComplete="current-password"
                     autoFocus
                   />
                 </div>
 
-                <div className="h-6 px-8 mt-2">
-                  {pinError && (
-                    <p className="text-xs font-semibold text-error flex items-center gap-1">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      {pinError}
-                    </p>
-                  )}
-                </div>
+                {emailError && (
+                  <p className="text-xs font-semibold text-error flex items-center gap-1.5 bg-error/10 border border-error/20 rounded-xl px-3 py-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    {emailError}
+                  </p>
+                )}
 
-                <div className="px-8 pb-6">
-                  <button
-                    type="button"
-                    onClick={handlePinNextStep}
-                    className="w-full h-11 bg-primary text-on-primary hover:bg-primary/90 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm text-sm"
-                  >
-                    Continue to PIN
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+                <button
+                  type="submit"
+                  disabled={signingIn}
+                  className="w-full h-11 bg-primary text-on-primary hover:bg-primary/90 rounded-xl font-bold flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm text-sm"
+                >
+                  {signingIn ? 'Signing In...' : 'Sign In'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
             ) : (
+              /* Staff PIN Keypad View */
               <div className="flex flex-col">
-                {/* Active Username Pill */}
-                <div className="px-8 pt-5">
-                  <div className="flex justify-between items-center bg-surface-container/40 border border-outline-variant/30 rounded-xl p-3">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-secondary" />
-                      <div className="text-left">
-                        <p className="text-[10px] uppercase tracking-wider text-on-surface-variant font-mono">Username</p>
-                        <p className="text-sm font-bold text-on-surface font-mono">{username}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPinStep('username');
-                        setPin('');
-                        setPinError(null);
-                      }}
-                      className="p-1 rounded-lg hover:bg-surface-container text-secondary hover:text-secondary/80 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                      Edit
-                    </button>
-                  </div>
-                </div>
-
                 {/* PIN Dots */}
                 <div className="px-8 pt-4 pb-2 text-center">
                   <div className="flex justify-center gap-4 mb-2">
@@ -348,61 +370,6 @@ export function AuthGate({
           </div>
         )}
 
-        {/* Tab 2: Admin Email Login */}
-        {activeTab === 'email' && (
-          <form onSubmit={handleEmailSignIn} className="px-8 py-6 space-y-4">
-            <div>
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                Admin/Staff Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => {
-                  setEmailError(null);
-                  setEmail(e.target.value);
-                }}
-                className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
-                placeholder="Enter staff email"
-                autoComplete="username"
-                autoFocus
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setEmailError(null);
-                  setPassword(e.target.value);
-                }}
-                className="w-full h-11 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
-                placeholder="Enter password"
-                autoComplete="current-password"
-              />
-            </div>
-
-            {emailError && (
-              <p className="text-xs font-semibold text-error bg-error/10 border border-error/20 rounded-xl px-3 py-2 flex items-center gap-1.5">
-                <ShieldAlert className="w-4 h-4 shrink-0" />
-                {emailError}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={signingIn}
-              className="w-full h-11 rounded-xl bg-primary text-on-primary font-bold hover:bg-primary/90 disabled:bg-slate-800 disabled:text-slate-500 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer shadow-sm text-sm"
-            >
-              <LogInIcon className="w-4 h-4" />
-              {signingIn ? 'Signing In...' : 'Sign In'}
-            </button>
-          </form>
-        )}
-
         {/* Action Footers */}
         {isClosable && onCancel && (
           <div className="px-6 py-4 bg-surface-container/50 border-t border-outline-variant/30 flex justify-end">
@@ -418,27 +385,5 @@ export function AuthGate({
         )}
       </div>
     </div>
-  );
-}
-
-// Simple LogIn icon wrapper to avoid name collision
-function LogInIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-      <polyline points="10 17 15 12 10 7" />
-      <line x1="15" y1="12" x2="3" y2="12" />
-    </svg>
   );
 }

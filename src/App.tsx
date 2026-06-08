@@ -8,6 +8,7 @@ import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
 import { StaffManager } from './components/StaffManager';
+import { ProfileModal } from './components/ProfileModal';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -85,6 +86,7 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
   const [isSwitchingStaff, setIsSwitchingStaff] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -630,8 +632,16 @@ export default function App() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setIsSwitchingStaff(true)}
+                    onClick={() => setShowProfileModal(true)}
                     className="ml-1 text-secondary hover:text-secondary-fixed-dim font-bold text-[10px] uppercase cursor-pointer"
+                  >
+                    Profile
+                  </button>
+                  <span className="text-outline-variant mx-0.5">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSwitchingStaff(true)}
+                    className="text-secondary hover:text-secondary-fixed-dim font-bold text-[10px] uppercase cursor-pointer"
                   >
                     Switch
                   </button>
@@ -676,7 +686,7 @@ export default function App() {
           {activeStaff && (
             <button
               type="button"
-              onClick={() => setIsSwitchingStaff(true)}
+              onClick={() => setShowProfileModal(true)}
               className="h-8 px-2.5 rounded-lg border border-outline-variant bg-surface-container text-on-surface flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0 cursor-pointer"
             >
               <Users className="w-3.5 h-3.5 text-secondary" />
@@ -810,6 +820,7 @@ export default function App() {
             onAdd={addStaffMember}
             onUpdate={updateStaffMember}
             onDelete={deleteStaffMember}
+            onEditProfile={() => setShowProfileModal(true)}
           />
         )}
       </main>
@@ -883,6 +894,19 @@ export default function App() {
             </div>
           </div>
         </button>
+      )}
+
+      {showProfileModal && activeStaff && (
+        <ProfileModal
+          activeStaff={activeStaff}
+          session={session}
+          onUpdateProfile={updateStaffMember}
+          onClose={() => setShowProfileModal(false)}
+          onSwitchStaff={() => {
+            setShowProfileModal(false);
+            setIsSwitchingStaff(true);
+          }}
+        />
       )}
     </div>
   );

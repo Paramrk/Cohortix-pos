@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserPlus, Shield, Check, X, ShieldAlert, Lock, Trash2, Key, Users } from 'lucide-react';
+import { UserPlus, Shield, Check, X, ShieldAlert, Lock, Trash2, Key, Users, User } from 'lucide-react';
 import type { StaffMember, StaffPermissions } from '../types';
 import { DEFAULT_STAFF_PERMISSIONS } from '../store';
 
@@ -9,6 +9,7 @@ interface StaffManagerProps {
   onAdd: (name: string, username: string, pin: string, role: 'owner' | 'staff', permissions: StaffPermissions) => Promise<void>;
   onUpdate: (id: string, updates: Partial<StaffMember>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onEditProfile?: () => void;
 }
 
 export function StaffManager({
@@ -17,6 +18,7 @@ export function StaffManager({
   onAdd,
   onUpdate,
   onDelete,
+  onEditProfile,
 }: StaffManagerProps) {
   const [name, setName] = useState('');
   const [usernameInput, setUsernameInput] = useState('');
@@ -409,6 +411,17 @@ export function StaffManager({
                   </div>
 
                   <div className="flex items-center gap-1.5">
+                    {isSelf && onEditProfile && (
+                      <button
+                        type="button"
+                        onClick={onEditProfile}
+                        className="h-7 px-2.5 rounded-lg border border-secondary bg-secondary/10 hover:bg-secondary/20 text-secondary flex items-center justify-center gap-1 text-[10px] font-bold transition-all cursor-pointer"
+                        title="Edit profile & email options"
+                      >
+                        <User className="w-3 h-3" />
+                        Edit Profile
+                      </button>
+                    )}
                     <span className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                       staff.role === 'owner' 
                         ? 'bg-secondary-container text-on-secondary-container' 
@@ -460,13 +473,25 @@ export function StaffManager({
 
                   {/* Permissions Settings */}
                   {staff.role === 'owner' ? (
-                    <div className="bg-secondary-container/10 border border-secondary/20 rounded-xl p-3 text-center">
-                      <p className="text-xs font-semibold text-on-secondary-container">
-                        Full Owner Permissions Granted
-                      </p>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        Owners always have complete access to all modules and metrics.
-                      </p>
+                    <div className="bg-secondary-container/10 border border-secondary/20 rounded-xl p-3 text-center flex flex-col items-center gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-on-secondary-container">
+                          Full Owner Permissions Granted
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Owners always have complete access to all modules and metrics.
+                        </p>
+                      </div>
+                      {isSelf && onEditProfile && (
+                        <button
+                          type="button"
+                          onClick={onEditProfile}
+                          className="h-8 px-4 rounded-xl bg-secondary text-on-secondary hover:opacity-90 font-bold transition-all flex items-center justify-center gap-1.5 text-xs shadow-sm cursor-pointer w-full mt-1"
+                        >
+                          <User className="w-3.5 h-3.5" />
+                          Edit Profile & Security
+                        </button>
+                      )}
                     </div>
                   ) : (
                     <div className="space-y-3">
