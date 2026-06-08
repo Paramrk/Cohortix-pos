@@ -11,6 +11,8 @@ import {
   PricingRule,
   UpdateOrderDetailsInput,
   VariantMode,
+  StaffMember,
+  StaffPermissions,
 } from './types';
 import { supabase } from './lib/supabase';
 import { recordOrderCreate, recordRealtimeDisconnect } from './lib/telemetry';
@@ -381,6 +383,42 @@ function toExpense(row: Record<string, unknown>): Expense {
   };
 }
 
+export const DEFAULT_STAFF_PERMISSIONS: StaffPermissions = {
+  modules: {
+    'new-order': true,
+    'queue': true,
+    'dashboard': true,
+    'menu': false,
+  },
+  metrics: {
+    todaySales: true,
+    expenses: false,
+    netProfit: false,
+    totalOrders: true,
+    avgOrderValue: true,
+    paymentBreakdown: false,
+    orderFlow: true,
+    collectionHealth: false,
+    productHighlights: true,
+    detailedOrders: true,
+    expenseManagement: false,
+  },
+};
+
+function toStaffMember(row: Record<string, unknown>): StaffMember {
+  const name = String(row.name ?? '');
+  const username = String(row.username ?? row.user_name ?? '').trim() || name.toLowerCase().replace(/\s+/g, '_');
+  return {
+    id: String(row.id),
+    name,
+    username,
+    pin: String(row.pin ?? ''),
+    role: (row.role === 'owner' || row.role === 'staff') ? row.role : 'staff',
+    permissions: (row.permissions ? row.permissions : DEFAULT_STAFF_PERMISSIONS) as StaffPermissions,
+    shopId: typeof row.shop_id === 'string' ? row.shop_id : undefined,
+  };
+}
+
 function toDashboardMetrics(payload: Record<string, unknown>): DashboardMetrics {
   return {
     businessDate: String(payload.business_date ?? getBusinessDateString()),
@@ -520,6 +558,202 @@ export function useStore() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Staff States
+  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [activeStaff, setActiveStaff] = useState<StaffMember | null>(() => {
+    try {
+      const raw = localStorage.getItem('pos_active_staff_v1');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+
+  const STAFF_STORAGE_KEY = 'pos_staff_members_v1';
+
+  const fetchStaffMembers = useCallback(async () => {
+    setStaffLoading(true);
+    setStaffError(null);
+    try {
+      const { data, error } = await supabase
+        .from('staff_members')
+        .select('*')
+        .eq('shop_id', SHOP_ID)
+        .order('name', { ascending: true });
+
+      if (isMissingRelationError(error, 'staff_members')) {
+        const raw = localStorage.getItem(STAFF_STORAGE_KEY);
+        const localStaff = raw ? JSON.parse(raw) : [];
+        setStaffMembers(localStaff);
+        setStaffLoading(false);
+        return;
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        setStaffMembers(data.map((row) => toStaffMember(row as Record<string, unknown>)));
+      }
+    } catch (err) {
+      console.error('Failed to fetch staff members:', err);
+      const raw = localStorage.getItem(STAFF_STORAGE_KEY);
+      const localStaff = raw ? JSON.parse(raw) : [];
+      setStaffMembers(localStaff);
+      setStaffError('Could not fetch staff from server. Using offline data.');
+    } finally {
+      setStaffLoading(false);
+    }
+  }, []);
+
+  const addStaffMember = useCallback(async (name: string, username: string, pin: string, role: 'owner' | 'staff', permissions: StaffPermissions) => {
+    const newStaff: StaffMember = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
+      name,
+      username,
+      pin,
+      role,
+      permissions,
+      shopId: SHOP_ID
+    };
+
+    setStaffMembers((prev) => {
+      const next = [...prev, newStaff];
+      localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    try {
+      const { error } = await supabase.from('staff_members').insert({
+        id: newStaff.id,
+        name: newStaff.name,
+        username: newStaff.username,
+        pin: newStaff.pin,
+        role: newStaff.role,
+        permissions: newStaff.permissions,
+        shop_id: SHOP_ID
+      });
+      if (error && !isMissingRelationError(error, 'staff_members')) {
+        console.error('Failed to save staff member to server:', error);
+      }
+    } catch (err) {
+      console.error('Failed to save staff member to server:', err);
+    }
+  }, []);
+
+  const updateStaffMember = useCallback(async (id: string, updates: Partial<StaffMember>) => {
+    let updatedStaff: StaffMember | null = null;
+    setStaffMembers((prev) => {
+      const next = prev.map((s) => {
+        if (s.id === id) {
+          updatedStaff = { ...s, ...updates };
+          return updatedStaff;
+        }
+        return s;
+      });
+      localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(next));
+      if (activeStaff && activeStaff.id === id) {
+        const nextActive = { ...activeStaff, ...updates };
+        localStorage.setItem('pos_active_staff_v1', JSON.stringify(nextActive));
+        setActiveStaff(nextActive);
+      }
+      return next;
+    });
+
+    if (updatedStaff) {
+      try {
+        const { error } = await supabase
+          .from('staff_members')
+          .update({
+            name: (updatedStaff as StaffMember).name,
+            username: (updatedStaff as StaffMember).username,
+            pin: (updatedStaff as StaffMember).pin,
+            role: (updatedStaff as StaffMember).role,
+            permissions: (updatedStaff as StaffMember).permissions
+          })
+          .eq('id', id);
+        if (error && !isMissingRelationError(error, 'staff_members')) {
+          console.error('Failed to update staff member on server:', error);
+        }
+      } catch (err) {
+        console.error('Failed to update staff member on server:', err);
+      }
+    }
+  }, [activeStaff]);
+
+  const deleteStaffMember = useCallback(async (id: string) => {
+    setStaffMembers((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+
+    if (activeStaff && activeStaff.id === id) {
+      localStorage.removeItem('pos_active_staff_v1');
+      setActiveStaff(null);
+    }
+
+    try {
+      const { error } = await supabase.from('staff_members').delete().eq('id', id);
+      if (error && !isMissingRelationError(error, 'staff_members')) {
+        console.error('Failed to delete staff member on server:', error);
+      }
+    } catch (err) {
+      console.error('Failed to delete staff member on server:', err);
+    }
+  }, [activeStaff]);
+
+  const switchStaff = useCallback((username: string, pin: string): boolean => {
+    const hasOwners = staffMembers.some((s) => s.role === 'owner');
+    if (!hasOwners && username.toLowerCase() === 'owner' && pin === '0000') {
+      const defaultOwner: StaffMember = {
+        id: 'default-owner',
+        name: 'Default Owner',
+        username: 'owner',
+        pin: '0000',
+        role: 'owner',
+        permissions: {
+          modules: { 'new-order': true, 'queue': true, 'dashboard': true, 'menu': true },
+          metrics: {
+            todaySales: true,
+            expenses: true,
+            netProfit: true,
+            totalOrders: true,
+            avgOrderValue: true,
+            paymentBreakdown: true,
+            orderFlow: true,
+            collectionHealth: true,
+            productHighlights: true,
+            detailedOrders: true,
+            expenseManagement: true,
+          }
+        }
+      };
+      setActiveStaff(defaultOwner);
+      localStorage.setItem('pos_active_staff_v1', JSON.stringify(defaultOwner));
+      return true;
+    }
+
+    const matched = staffMembers.find(
+      (s) => s.username.toLowerCase() === username.trim().toLowerCase() && s.pin === pin
+    );
+    if (matched) {
+      setActiveStaff(matched);
+      localStorage.setItem('pos_active_staff_v1', JSON.stringify(matched));
+      return true;
+    }
+    return false;
+  }, [staffMembers]);
+
+  const logoutStaff = useCallback(() => {
+    setActiveStaff(null);
+    localStorage.removeItem('pos_active_staff_v1');
+  }, []);
+
   const [pricingRule, setPricingRule] = useState<PricingRule>(() => readPricingRule());
   const [customerAppSettings, setCustomerAppSettings] = useState<CustomerAppSettings>(DEFAULT_CUSTOMER_APP_SETTINGS);
   const [customerAppSettingsLoading, setCustomerAppSettingsLoading] = useState(true);
@@ -932,9 +1166,11 @@ export function useStore() {
 
     setCustomerAppSettingsLoading(false);
 
+    await fetchStaffMembers();
+
     setLoading(false);
     void refreshDashboardMetrics();
-  }, [refreshDashboardMetrics]);
+  }, [refreshDashboardMetrics, fetchStaffMembers]);
 
   // Removed duplicate fetchAll and refreshAnalytics useEffects on mount.
   // These are now handled intelligently by App.tsx.
@@ -1721,6 +1957,16 @@ export function useStore() {
     analyticsExpenses,
     analyticsLoading,
     analyticsError,
+    staffMembers,
+    activeStaff,
+    staffLoading,
+    staffError,
+    fetchStaffMembers,
+    addStaffMember,
+    updateStaffMember,
+    deleteStaffMember,
+    switchStaff,
+    logoutStaff,
     addOrder,
     updateOrderDetails,
     cancelOrder,

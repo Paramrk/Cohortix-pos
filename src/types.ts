@@ -101,3 +101,36 @@ export interface UpdateOrderDetailsInput {
   paymentMethod: 'cash' | 'upi' | 'pay_later';
   paymentStatus: 'paid' | 'unpaid';
 }
+
+export interface StaffPermissions {
+  modules: {
+    'new-order': boolean;
+    'queue': boolean;
+    'dashboard': boolean;
+    'menu': boolean;
+  };
+  metrics: {
+    todaySales: boolean;
+    expenses: boolean;
+    netProfit: boolean;
+    totalOrders: boolean;
+    avgOrderValue: boolean;
+    paymentBreakdown: boolean;
+    orderFlow: boolean;
+    collectionHealth: boolean;
+    productHighlights: boolean;
+    detailedOrders: boolean;
+    expenseManagement: boolean;
+  };
+}
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  username: string;
+  pin: string;
+  role: 'owner' | 'staff';
+  permissions: StaffPermissions;
+  shopId?: string;
+}
+

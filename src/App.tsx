@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download, Sparkles } from 'lucide-react';
+import { Store, ClipboardList, BarChart3, Settings, BellRing, LogOut, Download, Sparkles, Users } from 'lucide-react';
 import type { Session } from '@supabase/supabase-js';
 import { useStore } from './store';
 import { NewOrder } from './components/NewOrder';
@@ -7,12 +7,13 @@ import { OrderQueue } from './components/OrderQueue';
 import { Dashboard } from './components/Dashboard';
 import { MenuManager } from './components/MenuManager';
 import { AuthGate } from './components/AuthGate';
+import { StaffManager } from './components/StaffManager';
 import { supabase } from './lib/supabase';
 import type { Order } from './types';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { showLocalNotification } from './lib/pushNotifications';
 
-type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu';
+type Tab = 'new-order' | 'queue' | 'dashboard' | 'menu' | 'staff';
 const ORDER_ALERTS_ENABLED_STORAGE_KEY = 'pos_order_alerts_enabled_v1';
 
 const COHORTIX_LIGHT_LOGO = `${import.meta.env.BASE_URL}cohortix/logo-name-lightheme.png`;
@@ -83,6 +84,7 @@ function NavButton({ tab, icon: Icon, label, badge = 0, activeTab, onSelect }: N
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('new-order');
+  const [isSwitchingStaff, setIsSwitchingStaff] = useState(false);
   const [showVoiceAssistant, setShowVoiceAssistant] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -277,11 +279,30 @@ export default function App() {
     dashboardMetrics, dashboardMetricsLoading,
     analyticsFilter, analyticsRange, analyticsOrders, analyticsExpenses, analyticsLoading, analyticsError, refreshAnalytics,
     refreshAll,
+    staffMembers,
+    activeStaff,
+    staffLoading,
+    staffError,
+    addStaffMember,
+    updateStaffMember,
+    deleteStaffMember,
+    switchStaff,
+    logoutStaff,
   } = useStore();
 
   const pendingCount = useMemo(
     () => orders.filter((order) => order.status === 'pending').length,
     [orders],
+  );
+
+  const hasModulePermission = useCallback(
+    (tab: Tab) => {
+      if (!activeStaff) return false;
+      if (activeStaff.role === 'owner') return true;
+      if (tab === 'staff') return false;
+      return activeStaff.permissions?.modules?.[tab as keyof typeof activeStaff.permissions.modules] ?? false;
+    },
+    [activeStaff],
   );
 
   const playIncomingOrderAlert = useCallback(() => {
@@ -453,6 +474,19 @@ export default function App() {
     }
   }, [refreshAll, refreshAnalytics, session]);
 
+  useEffect(() => {
+    if (activeStaff) {
+      if (activeStaff.role === 'owner') return;
+      if (!hasModulePermission(activeTab)) {
+        const permittedTabs: Tab[] = ['new-order', 'queue', 'dashboard', 'menu'];
+        const fallback = permittedTabs.find((t) => hasModulePermission(t));
+        if (fallback) {
+          setActiveTab(fallback);
+        }
+      }
+    }
+  }, [activeStaff, activeTab, hasModulePermission]);
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -464,13 +498,46 @@ export default function App() {
     );
   }
 
-  if (!session) {
+  // Render login screen if no staff is active or switching staff (unified gate)
+  if (!activeStaff || isSwitchingStaff) {
     return (
-      <AuthGate />
+      <AuthGate
+        staffMembers={staffMembers}
+        activeStaff={activeStaff}
+        session={session}
+        onPinAuthenticate={(username, pin) => {
+          const success = switchStaff(username, pin);
+          if (success) {
+            setIsSwitchingStaff(false);
+          }
+          return success;
+        }}
+        onEmailAuthenticate={async (email, password) => {
+          const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) throw error;
+          
+          // Auto-select owner staff profile
+          const ownerProfile = staffMembers.find((s) => s.role === 'owner');
+          if (ownerProfile) {
+            switchStaff(ownerProfile.username, ownerProfile.pin);
+          } else {
+            // Default Owner fallback
+            switchStaff('owner', '0000');
+          }
+          setIsSwitchingStaff(false);
+          return true;
+        }}
+        isClosable={activeStaff !== null}
+        onCancel={() => setIsSwitchingStaff(false)}
+      />
     );
   }
 
-  if (loading) {
+  // Render loading screen if logged in (online mode) and loading data
+  if (session && loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
@@ -482,7 +549,8 @@ export default function App() {
   }
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => undefined);
+    logoutStaff();
   };
 
   const serviceAlerts = [
@@ -528,10 +596,21 @@ export default function App() {
             </div>
             <div className="flex items-center gap-2">
               <nav className="flex space-x-2">
-                <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
-                <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+                {hasModulePermission('new-order') && (
+                  <NavButton tab="new-order" icon={Store} label="New Order" activeTab={activeTab} onSelect={setActiveTab} />
+                )}
+                {hasModulePermission('queue') && (
+                  <NavButton tab="queue" icon={ClipboardList} label="Orders Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
+                )}
+                {hasModulePermission('dashboard') && (
+                  <NavButton tab="dashboard" icon={BarChart3} label="Dashboard" activeTab={activeTab} onSelect={setActiveTab} />
+                )}
+                {hasModulePermission('menu') && (
+                  <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+                )}
+                {activeStaff?.role === 'owner' && (
+                  <NavButton tab="staff" icon={Users} label="Staff" activeTab={activeTab} onSelect={setActiveTab} />
+                )}
               </nav>
               {canInstallApp && (
                 <button
@@ -542,6 +621,21 @@ export default function App() {
                   <Download className="w-4 h-4" />
                   Install App
                 </button>
+              )}
+              {activeStaff && (
+                <div className="flex items-center gap-1.5 bg-surface-container border border-outline-variant px-3 h-10 rounded-lg text-xs">
+                  <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
+                  <span className="font-bold text-on-surface truncate max-w-[90px]" title={activeStaff.name}>
+                    {activeStaff.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsSwitchingStaff(true)}
+                    className="ml-1 text-secondary hover:text-secondary-fixed-dim font-bold text-[10px] uppercase cursor-pointer"
+                  >
+                    Switch
+                  </button>
+                </div>
               )}
               <button
                 type="button"
@@ -577,6 +671,16 @@ export default function App() {
             >
               <Download className="w-3.5 h-3.5" />
               Install
+            </button>
+          )}
+          {activeStaff && (
+            <button
+              type="button"
+              onClick={() => setIsSwitchingStaff(true)}
+              className="h-8 px-2.5 rounded-lg border border-outline-variant bg-surface-container text-on-surface flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0 cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 text-secondary" />
+              <span className="truncate max-w-[70px]">{activeStaff.name}</span>
             </button>
           )}
           <button
@@ -666,6 +770,7 @@ export default function App() {
               void refreshAnalytics(nextFilter);
             }}
             onToggleCustomerAI={updateCustomerAIEnabled}
+            activeStaff={activeStaff}
           />
         )}
         {activeTab === 'menu' && (
@@ -698,6 +803,15 @@ export default function App() {
             onChangeCustomText={setCustomText}
           />
         )}
+        {activeTab === 'staff' && activeStaff?.role === 'owner' && (
+          <StaffManager
+            staffMembers={staffMembers}
+            activeStaff={activeStaff}
+            onAdd={addStaffMember}
+            onUpdate={updateStaffMember}
+            onDelete={deleteStaffMember}
+          />
+        )}
       </main>
 
       <footer className="hidden md:block bg-surface border-t border-outline-variant py-4">
@@ -715,10 +829,21 @@ export default function App() {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-outline-variant flex justify-around items-start z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        <NavButton tab="new-order" icon={Store} label="Order" activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="queue" icon={ClipboardList} label="Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="dashboard" icon={BarChart3} label="Stats" activeTab={activeTab} onSelect={setActiveTab} />
-        <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+        {hasModulePermission('new-order') && (
+          <NavButton tab="new-order" icon={Store} label="Order" activeTab={activeTab} onSelect={setActiveTab} />
+        )}
+        {hasModulePermission('queue') && (
+          <NavButton tab="queue" icon={ClipboardList} label="Queue" badge={pendingCount} activeTab={activeTab} onSelect={setActiveTab} />
+        )}
+        {hasModulePermission('dashboard') && (
+          <NavButton tab="dashboard" icon={BarChart3} label="Stats" activeTab={activeTab} onSelect={setActiveTab} />
+        )}
+        {hasModulePermission('menu') && (
+          <NavButton tab="menu" icon={Settings} label="Menu" activeTab={activeTab} onSelect={setActiveTab} />
+        )}
+        {activeStaff?.role === 'owner' && (
+          <NavButton tab="staff" icon={Users} label="Staff" activeTab={activeTab} onSelect={setActiveTab} />
+        )}
       </nav>
 
       {/* Global Animated AI Assistant Floating Button */}

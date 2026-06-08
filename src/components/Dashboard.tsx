@@ -16,7 +16,7 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react';
-import type { AnalyticsFilter, AnalyticsRange, DashboardMetrics, Expense, Order } from '../types';
+import type { AnalyticsFilter, AnalyticsRange, DashboardMetrics, Expense, Order, StaffMember, StaffPermissions } from '../types';
 
 interface DashboardProps {
   onAddExpense: (desc: string, amount: number) => void;
@@ -34,6 +34,7 @@ interface DashboardProps {
   analyticsError?: string | null;
   onChangeAnalyticsFilter: (filter: AnalyticsFilter | AnalyticsRange) => void;
   onToggleCustomerAI: (enabled: boolean) => Promise<void>;
+  activeStaff?: StaffMember | null;
 }
 
 const CANCEL_REASON_PREFIX = 'Cancel reason:';
@@ -185,7 +186,13 @@ export function Dashboard({
   analyticsError,
   onChangeAnalyticsFilter,
   onToggleCustomerAI,
+  activeStaff = null,
 }: DashboardProps) {
+  const hasPermission = (key: keyof StaffPermissions['metrics']) => {
+    if (!activeStaff) return true;
+    if (activeStaff.role === 'owner') return true;
+    return activeStaff.permissions?.metrics?.[key] ?? false;
+  };
   const [expenseDesc, setExpenseDesc] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
   const [specificDate, setSpecificDate] = useState(analyticsFilter.specificDate ?? '');
@@ -569,30 +576,32 @@ export function Dashboard({
           </div>
           <div className="z-10 mt-1">
             <h3 className="text-2xl sm:text-3xl font-extrabold text-secondary font-headline">
-              {formatCurrency(collected)}
+              {hasPermission('todaySales') ? formatCurrency(collected) : 'Rs ••••'}
             </h3>
             <p className="text-[10px] text-slate-400 font-medium mt-1">
-              Billed: {formatCurrency(totalSales)}
+              {hasPermission('todaySales') ? `Billed: ${formatCurrency(totalSales)}` : 'Billed: Restricted'}
             </p>
           </div>
           {/* Sparkline Chart SVG */}
-          <div className="w-full h-11 mt-2 z-10 pointer-events-none">
-            <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 30">
-              <path d="M0,30 L0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0 L100,30 Z" fill="#6cf8bb" opacity="0.12"></path>
-              <path d="M0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0" fill="none" stroke="#006c49" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5"></path>
-              <circle cx="100" cy="0" fill="#ffffff" r="2.5" stroke="#006c49" strokeWidth="1.5"></circle>
-            </svg>
-          </div>
+          {hasPermission('todaySales') && (
+            <div className="w-full h-11 mt-2 z-10 pointer-events-none">
+              <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 30">
+                <path d="M0,30 L0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0 L100,30 Z" fill="#6cf8bb" opacity="0.12"></path>
+                <path d="M0,25 L10,22 L20,26 L30,18 L40,20 L50,12 L60,15 L70,5 L80,8 L90,2 L100,0" fill="none" stroke="#006c49" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5"></path>
+                <circle cx="100" cy="0" fill="#ffffff" r="2.5" stroke="#006c49" strokeWidth="1.5"></circle>
+              </svg>
+            </div>
+          )}
         </div>
 
         {/* Expenses Card */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1.5 shadow-sm relative overflow-hidden transition-all duration-200 hover:scale-[1.02]">
           <p className="text-xs uppercase tracking-wider font-bold text-on-surface-variant">Expenses</p>
           <h3 className="text-2xl font-bold text-rose-600 font-headline mt-1">
-            {formatCurrency(expensesTotal)}
+            {hasPermission('expenses') ? formatCurrency(expensesTotal) : 'Rs ••••'}
           </h3>
           <p className="text-[10px] text-slate-400 font-medium mt-auto">
-            {sortedExpenses.length} entries recorded
+            {hasPermission('expenses') ? `${sortedExpenses.length} entries recorded` : 'Restricted'}
           </p>
         </div>
 
@@ -600,7 +609,7 @@ export function Dashboard({
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1.5 shadow-sm relative overflow-hidden transition-all duration-200 hover:scale-[1.02]">
           <p className="text-xs uppercase tracking-wider font-bold text-on-surface-variant">Net Profit</p>
           <h3 className={`text-2xl font-bold font-headline mt-1 ${netProfit >= 0 ? 'text-secondary' : 'text-rose-600'}`}>
-            {formatCurrency(netProfit)}
+            {hasPermission('netProfit') ? formatCurrency(netProfit) : 'Rs ••••'}
           </h3>
           <p className="text-[10px] text-slate-400 font-medium mt-auto">
             Based on collected cash/UPI
@@ -611,10 +620,10 @@ export function Dashboard({
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1.5 shadow-sm relative overflow-hidden transition-all duration-200 hover:scale-[1.02]">
           <p className="text-xs uppercase tracking-wider font-bold text-on-surface-variant">Total Orders</p>
           <h3 className="text-2xl font-bold text-on-surface font-headline mt-1">
-            {orderCount}
+            {hasPermission('totalOrders') ? orderCount : '••••'}
           </h3>
           <p className="text-[10px] text-slate-400 font-medium mt-auto">
-            {itemsSold} items sold
+            {hasPermission('totalOrders') ? `${itemsSold} items sold` : 'Restricted'}
           </p>
         </div>
 
@@ -622,10 +631,10 @@ export function Dashboard({
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-4 flex flex-col gap-1.5 shadow-sm relative overflow-hidden transition-all duration-200 hover:scale-[1.02]">
           <p className="text-xs uppercase tracking-wider font-bold text-on-surface-variant">Avg Order Value</p>
           <h3 className="text-2xl font-bold text-on-surface font-headline mt-1">
-            {formatCurrency(avgOrderValue)}
+            {hasPermission('avgOrderValue') ? formatCurrency(avgOrderValue) : 'Rs ••••'}
           </h3>
           <p className="text-[10px] text-slate-400 font-medium mt-auto">
-            {orderCount > 0 ? `${orderCount} orders` : 'No orders yet'}
+            {hasPermission('avgOrderValue') ? (orderCount > 0 ? `${orderCount} orders` : 'No orders yet') : 'Restricted'}
           </p>
         </div>
       </div>
@@ -635,328 +644,379 @@ export function Dashboard({
         {/* Payment Breakdown */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
           <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Payment Breakdown</h3>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <div className="flex items-center gap-2 text-on-surface-variant">
-              <Wallet className="w-4 h-4 text-secondary" />
-              <span className="text-xs font-semibold">Cash Paid</span>
+          {hasPermission('paymentBreakdown') ? (
+            <>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <Wallet className="w-4 h-4 text-secondary" />
+                  <span className="text-xs font-semibold">Cash Paid</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-secondary font-headline">{formatCurrency(paymentBreakdown.cash.total)}</p>
+                  <p className="text-[10px] text-slate-400">{paymentBreakdown.cash.count} orders</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <Smartphone className="w-4 h-4 text-secondary" />
+                  <span className="text-xs font-semibold">UPI Paid</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-secondary font-headline">{formatCurrency(paymentBreakdown.upi.total)}</p>
+                  <p className="text-[10px] text-slate-400">{paymentBreakdown.upi.count} orders</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-rose-200/60 bg-rose-50/50 p-3">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <Clock3 className="w-4 h-4 text-rose-500" />
+                  <span className="text-xs font-semibold">Unpaid Due</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-rose-700 font-headline">{formatCurrency(paymentBreakdown.unpaid.total)}</p>
+                  <p className="text-[10px] text-rose-500">{paymentBreakdown.unpaid.count} orders</p>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-center text-on-surface-variant">
+              <Lock className="w-6 h-6 text-outline mb-1.5" />
+              <p className="text-xs font-bold font-headline">Restricted</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-bold text-secondary font-headline">{formatCurrency(paymentBreakdown.cash.total)}</p>
-              <p className="text-[10px] text-slate-400">{paymentBreakdown.cash.count} orders</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <div className="flex items-center gap-2 text-on-surface-variant">
-              <Smartphone className="w-4 h-4 text-secondary" />
-              <span className="text-xs font-semibold">UPI Paid</span>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-bold text-secondary font-headline">{formatCurrency(paymentBreakdown.upi.total)}</p>
-              <p className="text-[10px] text-slate-400">{paymentBreakdown.upi.count} orders</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-rose-200/60 bg-rose-50/50 p-3">
-            <div className="flex items-center gap-2 text-rose-700">
-              <Clock3 className="w-4 h-4 text-rose-500" />
-              <span className="text-xs font-semibold">Unpaid Due</span>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-bold text-rose-700 font-headline">{formatCurrency(paymentBreakdown.unpaid.total)}</p>
-              <p className="text-[10px] text-rose-500">{paymentBreakdown.unpaid.count} orders</p>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Order Flow */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
           <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Order Flow</h3>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <div className="flex items-center gap-2 text-on-surface-variant">
-              <CircleDot className="w-4 h-4 text-orange-500" />
-              <span className="text-xs font-semibold">Pending</span>
+          {hasPermission('orderFlow') ? (
+            <>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <CircleDot className="w-4 h-4 text-orange-500" />
+                  <span className="text-xs font-semibold">Pending</span>
+                </div>
+                <span className="text-xs font-bold text-orange-600 font-mono">
+                  {flowBreakdown.pending.count} ({formatCurrency(flowBreakdown.pending.total)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <ClipboardCheck className="w-4 h-4 text-secondary" />
+                  <span className="text-xs font-semibold">Completed</span>
+                </div>
+                <span className="text-xs font-bold text-secondary font-mono">
+                  {flowBreakdown.completed.count} ({formatCurrency(flowBreakdown.completed.total)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-rose-200/60 bg-rose-50/50 p-3">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <TrendingDown className="w-4 h-4 text-rose-500" />
+                  <span className="text-xs font-semibold">Cancelled</span>
+                </div>
+                <span className="text-xs font-bold text-rose-600 font-mono">
+                  {flowBreakdown.cancelled.count} ({formatCurrency(flowBreakdown.cancelled.total)})
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <span className="text-xs font-semibold text-on-surface-variant">POS Orders</span>
+                <span className="text-xs font-bold text-on-surface font-mono">{sourceBreakdown.pos}</span>
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
+                <span className="text-xs font-semibold text-on-surface-variant">Customer App</span>
+                <span className="text-xs font-bold text-on-surface font-mono">{sourceBreakdown.customer}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-14 text-center text-on-surface-variant">
+              <Lock className="w-6 h-6 text-outline mb-1.5" />
+              <p className="text-xs font-bold font-headline">Restricted</p>
             </div>
-            <span className="text-xs font-bold text-orange-600 font-mono">
-              {flowBreakdown.pending.count} ({formatCurrency(flowBreakdown.pending.total)})
-            </span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <div className="flex items-center gap-2 text-on-surface-variant">
-              <ClipboardCheck className="w-4 h-4 text-secondary" />
-              <span className="text-xs font-semibold">Completed</span>
-            </div>
-            <span className="text-xs font-bold text-secondary font-mono">
-              {flowBreakdown.completed.count} ({formatCurrency(flowBreakdown.completed.total)})
-            </span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-rose-200/60 bg-rose-50/50 p-3">
-            <div className="flex items-center gap-2 text-rose-700">
-              <TrendingDown className="w-4 h-4 text-rose-500" />
-              <span className="text-xs font-semibold">Cancelled</span>
-            </div>
-            <span className="text-xs font-bold text-rose-600 font-mono">
-              {flowBreakdown.cancelled.count} ({formatCurrency(flowBreakdown.cancelled.total)})
-            </span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <span className="text-xs font-semibold text-on-surface-variant">POS Orders</span>
-            <span className="text-xs font-bold text-on-surface font-mono">{sourceBreakdown.pos}</span>
-          </div>
-          <div className="flex items-center justify-between rounded-xl border border-outline-variant/60 bg-surface/50 p-3">
-            <span className="text-xs font-semibold text-on-surface-variant">Customer App</span>
-            <span className="text-xs font-bold text-on-surface font-mono">{sourceBreakdown.customer}</span>
-          </div>
+          )}
         </div>
 
         {/* Collection Health */}
         <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
           <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Collection Health</h3>
-          <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Collection Rate</p>
-            <p className="text-lg font-bold text-secondary font-headline">{collectionRate}%</p>
-          </div>
-          <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Expense Share</p>
-            <p className="text-lg font-bold text-rose-600 font-headline">{expenseShare}%</p>
-          </div>
-          <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Avg Expense Entry</p>
-            <p className="text-lg font-bold text-on-surface font-headline">{formatCurrency(avgExpense)}</p>
-          </div>
-          <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
-            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Pending Due</p>
-            <p className="text-lg font-bold text-error font-headline">{formatCurrency(pendingDue)}</p>
-          </div>
+          {hasPermission('collectionHealth') ? (
+            <>
+              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Collection Rate</p>
+                <p className="text-lg font-bold text-secondary font-headline">{collectionRate}%</p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Expense Share</p>
+                <p className="text-lg font-bold text-rose-600 font-headline">{expenseShare}%</p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Avg Expense Entry</p>
+                <p className="text-lg font-bold text-on-surface font-headline">{formatCurrency(avgExpense)}</p>
+              </div>
+              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-2.5">
+                <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400">Pending Due</p>
+                <p className="text-lg font-bold text-error font-headline">{formatCurrency(pendingDue)}</p>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-on-surface-variant">
+              <Lock className="w-6 h-6 text-outline mb-1.5" />
+              <p className="text-xs font-bold font-headline">Restricted</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Highlights & Top Selling Items */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5">
-          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-3">Product Sales Highlights</h3>
-          {productStats.allRows.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center">No product sales in this range.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-secondary/20 bg-secondary-container/10 p-3.5">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-secondary">Most Sold Item</p>
-                <p className="text-sm font-bold text-on-secondary-container mt-1">{productStats.mostSold?.name}</p>
-                <p className="text-xs text-secondary mt-1 font-mono font-bold">
-                  Qty: {productStats.mostSold?.quantitySold ?? 0} | Orders: {productStats.mostSold?.orderCount ?? 0}
-                </p>
-              </div>
-              <div className="rounded-xl border border-rose-200/50 bg-rose-50/50 p-3.5">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-rose-700">Least Sold Item</p>
-                <p className="text-sm font-bold text-rose-800 mt-1">{productStats.leastSold?.name}</p>
-                <p className="text-xs text-rose-700 mt-1 font-mono font-bold">
-                  Qty: {productStats.leastSold?.quantitySold ?? 0} | Orders: {productStats.leastSold?.orderCount ?? 0}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5">
-          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-3">Product Order Count</h3>
-          {productStats.allRows.length === 0 ? (
-            <p className="text-xs text-slate-400 py-6 text-center">No product stats available.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Top Sold list with Progress Bars */}
-              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant mb-1 font-mono">Top Selling</p>
-                <div className="space-y-3">
-                  {productStats.topRows.slice(0, 5).map((row) => {
-                    const pct = Math.round((row.quantitySold / maxQty) * 100);
-                    return (
-                      <div key={`top-${row.key}`} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs gap-2">
-                          <span className="font-semibold text-on-surface truncate">{row.name}</span>
-                          <span className="font-bold text-on-surface shrink-0 text-[10px] font-mono">{row.quantitySold} sold</span>
-                        </div>
-                        <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-secondary h-full rounded-full" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Least Sold list with Progress Bars */}
-              <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-3 space-y-2">
-                <p className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant mb-1 font-mono">Least Selling</p>
-                <div className="space-y-3">
-                  {productStats.bottomRows.slice(0, 5).map((row) => {
-                    const pct = Math.round((row.quantitySold / maxQty) * 100);
-                    return (
-                      <div key={`bottom-${row.key}`} className="space-y-1">
-                        <div className="flex items-center justify-between text-xs gap-2">
-                          <span className="font-semibold text-on-surface truncate">{row.name}</span>
-                          <span className="font-bold text-on-surface shrink-0 text-[10px] font-mono">{row.quantitySold} sold</span>
-                        </div>
-                        <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
-                          <div className="bg-secondary-fixed-dim h-full rounded-full" style={{ width: `${pct}%` }}></div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Expense Management */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
-          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider flex items-center gap-2">
-            <PlusCircle className="w-5 h-5 text-rose-500" />
-            Add Expense
-          </h3>
-          <form onSubmit={handleAddExpense} className="space-y-4">
-            <div>
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">Description</label>
-              <input
-                type="text"
-                value={expenseDesc}
-                onChange={(e) => setExpenseDesc(e.target.value)}
-                placeholder="e.g., Ice blocks, syrups, cups"
-                className="w-full h-10 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">Amount (₹)</label>
-              <input
-                type="number"
-                value={expenseAmount}
-                onChange={(e) => setExpenseAmount(e.target.value)}
-                placeholder="0"
-                min="1"
-                className="w-full h-10 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full h-11 bg-rose-600 hover:opacity-90 text-white font-bold rounded-xl transition-all scale-98 active:scale-95 duration-150 shadow-sm text-sm"
-            >
-              Save Expense
-            </button>
-          </form>
-        </div>
-
-        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
-          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-slate-500" />
-            {rangeLabel} Expenses Log
-          </h3>
-          <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1 no-scrollbar">
-            {sortedExpenses.length === 0 ? (
-              <p className="text-slate-400 text-xs text-center py-10">No expenses recorded for this range.</p>
+      {hasPermission('productHighlights') ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5">
+            <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-3">Product Sales Highlights</h3>
+            {productStats.allRows.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">No product sales in this range.</p>
             ) : (
-              sortedExpenses.map((expense) => (
-                <div key={expense.id} className="flex justify-between items-center p-3 bg-surface border border-outline-variant/60 rounded-xl">
-                  <div>
-                    <p className="font-semibold text-xs text-on-surface">{expense.description}</p>
-                    <p className="text-[10px] text-slate-500 font-mono">{formatDateTime(expense.timestamp)}</p>
-                  </div>
-                  <span className="font-bold text-xs text-rose-600 font-headline">{formatCurrency(expense.amount)}</span>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-secondary/20 bg-secondary-container/10 p-3.5">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-secondary">Most Sold Item</p>
+                  <p className="text-sm font-bold text-on-secondary-container mt-1">{productStats.mostSold?.name}</p>
+                  <p className="text-xs text-secondary mt-1 font-mono font-bold">
+                    Qty: {productStats.mostSold?.quantitySold ?? 0} | Orders: {productStats.mostSold?.orderCount ?? 0}
+                  </p>
                 </div>
-              ))
+                <div className="rounded-xl border border-rose-200/50 bg-rose-50/50 p-3.5">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-rose-700">Least Sold Item</p>
+                  <p className="text-sm font-bold text-rose-800 mt-1">{productStats.leastSold?.name}</p>
+                  <p className="text-xs text-rose-700 mt-1 font-mono font-bold">
+                    Qty: {productStats.leastSold?.quantitySold ?? 0} | Orders: {productStats.leastSold?.orderCount ?? 0}
+                  </p>
+                </div>
+              </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* Orders List (Detailed) */}
-      <div className="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant">
-        <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-4 flex items-center gap-2">
-          <ShoppingCart className="w-4.5 h-4.5 text-secondary" />
-          Orders List (Detailed)
-        </h3>
-        <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
-          {sortedOrders.length === 0 ? (
-            <p className="text-xs text-slate-400 text-center py-12">No orders in this range.</p>
-          ) : (
-            sortedOrders.map((order) => {
-              const cancelReason = getCancelReason(order.orderInstructions);
-              const visibleInstructions = getVisibleInstructions(order.orderInstructions);
-              return (
-                <div key={order.id} className="rounded-xl border border-outline-variant bg-surface/30 p-4 shadow-sm hover:scale-[1.005] transition-transform duration-200">
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/40 pb-2.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-sm text-on-surface">#{order.orderNumber}</span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-transparent ${order.status === 'pending'
-                        ? 'bg-error-container text-on-error-container'
-                        : order.status === 'completed'
-                          ? 'bg-secondary-container text-on-secondary-container'
-                          : 'bg-surface-variant text-on-surface-variant border-outline-variant'
-                        }`}>
-                        {order.status}
-                      </span>
-                      <span className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-transparent ${order.paymentStatus === 'paid'
-                        ? 'bg-secondary-container text-on-secondary-container'
-                        : 'bg-error-container text-on-error-container'
-                        }`}>
-                        {order.paymentStatus} / {order.paymentMethod.toUpperCase()}
-                      </span>
-                    </div>
-                    <div className="text-sm font-bold text-on-surface font-headline">{formatCurrency(order.total)}</div>
-                  </div>
-
-                  <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px] text-on-surface-variant">
-                    <p><strong>Customer:</strong> {order.customerName}</p>
-                    <p><strong>Source:</strong> <span className="uppercase font-semibold">{order.source ?? 'unknown'}</span></p>
-                    <p><strong>When:</strong> {formatDateTime(order.timestamp)}</p>
-                  </div>
-
-                  {cancelReason && (
-                    <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                      <strong>Cancel reason:</strong> {cancelReason}
-                    </div>
-                  )}
-
-                  {visibleInstructions && (
-                    <div className="mt-2 rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs text-on-surface whitespace-pre-line">
-                      <strong>Instructions:</strong> {visibleInstructions}
-                    </div>
-                  )}
-
-                  <div className="mt-2.5 rounded-xl border border-outline-variant/60 bg-surface/60 p-3 space-y-2">
-                    {order.items.map((item, idx) => {
-                      const rawItem = item as unknown as Record<string, unknown>;
-                      const variant = getItemVariant(rawItem);
-                      const lineTotal = getLineTotal(rawItem);
-                      const unitPrice = Number(rawItem.calculatedPrice ?? rawItem.price ?? 0);
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5">
+            <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-3">Product Order Count</h3>
+            {productStats.allRows.length === 0 ? (
+              <p className="text-xs text-slate-400 py-6 text-center">No product stats available.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Top Sold list with Progress Bars */}
+                <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant mb-1 font-mono">Top Selling</p>
+                  <div className="space-y-3">
+                    {productStats.topRows.slice(0, 5).map((row) => {
+                      const pct = Math.round((row.quantitySold / maxQty) * 100);
                       return (
-                        <div key={`${order.id}-${idx}`} className="flex items-start justify-between gap-3 text-xs">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-on-surface break-words flex items-center gap-1.5">
-                              <span className="font-bold text-on-secondary-container bg-secondary-container px-1.5 py-0.5 rounded text-[10px] font-mono">
-                                {rawItem.quantity ?? item.quantity}x
-                              </span>
-                              {rawItem.name ?? item.name}
-                            </p>
-                            <p className="text-[10px] text-slate-500 mt-0.5 pl-6">
-                              {typeof rawItem.category === 'string' ? rawItem.category : item.category}
-                              {variant ? ` | ${variant}` : ''}
-                              {' | '}
-                              {formatCurrency(Number.isFinite(unitPrice) ? unitPrice : 0)} each
-                            </p>
+                        <div key={`top-${row.key}`} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="font-semibold text-on-surface truncate">{row.name}</span>
+                            <span className="font-bold text-on-surface shrink-0 text-[10px] font-mono">{row.quantitySold} sold</span>
                           </div>
-                          <p className="font-bold text-on-surface font-headline shrink-0">{formatCurrency(lineTotal)}</p>
+                          <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-secondary h-full rounded-full" style={{ width: `${pct}%` }}></div>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
-              );
-            })
-          )}
+
+                {/* Least Sold list with Progress Bars */}
+                <div className="rounded-xl border border-outline-variant/60 bg-surface/50 p-3 space-y-2">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-on-surface-variant mb-1 font-mono">Least Selling</p>
+                  <div className="space-y-3">
+                    {productStats.bottomRows.slice(0, 5).map((row) => {
+                      const pct = Math.round((row.quantitySold / maxQty) * 100);
+                      return (
+                        <div key={`bottom-${row.key}`} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="font-semibold text-on-surface truncate">{row.name}</span>
+                            <span className="font-bold text-on-surface shrink-0 text-[10px] font-mono">{row.quantitySold} sold</span>
+                          </div>
+                          <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                            <div className="bg-secondary-fixed-dim h-full rounded-full" style={{ width: `${pct}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 text-center flex flex-col items-center justify-center py-10">
+          <Lock className="w-6 h-6 text-outline mb-1.5" />
+          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Product Highlights</h3>
+          <p className="text-xs text-on-surface-variant mt-1">Restricted</p>
+        </div>
+      )}
+
+      {/* Expense Management */}
+      {hasPermission('expenseManagement') ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
+            <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider flex items-center gap-2">
+              <PlusCircle className="w-5 h-5 text-rose-500" />
+              Add Expense
+            </h3>
+            <form onSubmit={handleAddExpense} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">Description</label>
+                <input
+                  type="text"
+                  value={expenseDesc}
+                  onChange={(e) => setExpenseDesc(e.target.value)}
+                  placeholder="e.g., Ice blocks, syrups, cups"
+                  className="w-full h-10 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono font-bold uppercase tracking-wider text-on-surface-variant mb-1">Amount (₹)</label>
+                <input
+                  type="number"
+                  value={expenseAmount}
+                  onChange={(e) => setExpenseAmount(e.target.value)}
+                  placeholder="0"
+                  min="1"
+                  className="w-full h-10 px-4 border border-outline-variant bg-surface rounded-xl focus:outline-none focus:ring-2 focus:ring-secondary text-sm text-on-surface"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full h-11 bg-rose-600 hover:opacity-90 text-white font-bold rounded-xl transition-all scale-98 active:scale-95 duration-150 shadow-sm text-sm"
+              >
+                Save Expense
+              </button>
+            </form>
+          </div>
+
+          <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 space-y-3">
+            <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-slate-500" />
+              {rangeLabel} Expenses Log
+            </h3>
+            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1 no-scrollbar">
+              {sortedExpenses.length === 0 ? (
+                <p className="text-slate-400 text-xs text-center py-10">No expenses recorded for this range.</p>
+              ) : (
+                sortedExpenses.map((expense) => (
+                  <div key={expense.id} className="flex justify-between items-center p-3 bg-surface border border-outline-variant/60 rounded-xl">
+                    <div>
+                      <p className="font-semibold text-xs text-on-surface">{expense.description}</p>
+                      <p className="text-[10px] text-slate-500 font-mono">{formatDateTime(expense.timestamp)}</p>
+                    </div>
+                    <span className="font-bold text-xs text-rose-600 font-headline">{formatCurrency(expense.amount)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 text-center flex flex-col items-center justify-center py-10">
+          <Lock className="w-6 h-6 text-outline mb-1.5" />
+          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Expense Management</h3>
+          <p className="text-xs text-on-surface-variant mt-1">Restricted</p>
+        </div>
+      )}
+
+      {/* Orders List (Detailed) */}
+      {hasPermission('detailedOrders') ? (
+        <div className="bg-surface-container-lowest p-5 rounded-2xl shadow-sm border border-outline-variant">
+          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider mb-4 flex items-center gap-2">
+            <ShoppingCart className="w-4.5 h-4.5 text-secondary" />
+            Orders List (Detailed)
+          </h3>
+          <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1 no-scrollbar">
+            {sortedOrders.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-12">No orders in this range.</p>
+            ) : (
+              sortedOrders.map((order) => {
+                const cancelReason = getCancelReason(order.orderInstructions);
+                const visibleInstructions = getVisibleInstructions(order.orderInstructions);
+                return (
+                  <div key={order.id} className="rounded-xl border border-outline-variant bg-surface/30 p-4 shadow-sm hover:scale-[1.005] transition-transform duration-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-outline-variant/40 pb-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-on-surface">#{order.orderNumber}</span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-transparent ${order.status === 'pending'
+                          ? 'bg-error-container text-on-error-container'
+                          : order.status === 'completed'
+                            ? 'bg-secondary-container text-on-secondary-container'
+                            : 'bg-surface-variant text-on-surface-variant border-outline-variant'
+                          }`}>
+                          {order.status}
+                        </span>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-transparent ${order.paymentStatus === 'paid'
+                          ? 'bg-secondary-container text-on-secondary-container'
+                          : 'bg-error-container text-on-error-container'
+                          }`}>
+                          {order.paymentStatus} / {order.paymentMethod.toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-on-surface font-headline">{formatCurrency(order.total)}</div>
+                    </div>
+
+                    <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-3 gap-1.5 text-[11px] text-on-surface-variant">
+                      <p><strong>Customer:</strong> {order.customerName}</p>
+                      <p><strong>Source:</strong> <span className="uppercase font-semibold">{order.source ?? 'unknown'}</span></p>
+                      <p><strong>When:</strong> {formatDateTime(order.timestamp)}</p>
+                    </div>
+
+                    {cancelReason && (
+                      <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                        <strong>Cancel reason:</strong> {cancelReason}
+                      </div>
+                    )}
+
+                    {visibleInstructions && (
+                      <div className="mt-2 rounded-xl border border-outline-variant bg-surface px-3 py-2 text-xs text-on-surface whitespace-pre-line">
+                        <strong>Instructions:</strong> {visibleInstructions}
+                      </div>
+                    )}
+
+                    <div className="mt-2.5 rounded-xl border border-outline-variant/60 bg-surface/60 p-3 space-y-2">
+                      {order.items.map((item, idx) => {
+                        const rawItem = item as unknown as Record<string, unknown>;
+                        const variant = getItemVariant(rawItem);
+                        const lineTotal = getLineTotal(rawItem);
+                        const unitPrice = Number(rawItem.calculatedPrice ?? rawItem.price ?? 0);
+                        return (
+                          <div key={`${order.id}-${idx}`} className="flex items-start justify-between gap-3 text-xs">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-on-surface break-words flex items-center gap-1.5">
+                                <span className="font-bold text-on-secondary-container bg-secondary-container px-1.5 py-0.5 rounded text-[10px] font-mono">
+                                  {rawItem.quantity ?? item.quantity}x
+                                </span>
+                                {rawItem.name ?? item.name}
+                              </p>
+                              <p className="text-[10px] text-slate-500 mt-0.5 pl-6">
+                                {typeof rawItem.category === 'string' ? rawItem.category : item.category}
+                                {variant ? ` | ${variant}` : ''}
+                                {' | '}
+                                {formatCurrency(Number.isFinite(unitPrice) ? unitPrice : 0)} each
+                              </p>
+                            </div>
+                            <p className="font-bold text-on-surface font-headline shrink-0">{formatCurrency(lineTotal)}</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-5 text-center flex flex-col items-center justify-center py-10 animate-fade-in">
+          <Lock className="w-6 h-6 text-outline mb-1.5" />
+          <h3 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider">Orders List (Detailed)</h3>
+          <p className="text-xs text-on-surface-variant mt-1">Restricted</p>
+        </div>
+      )}
 
       {metrics && (
         <div className="rounded-xl border border-outline-variant/50 bg-surface-container px-4 py-2.5 text-xs text-on-surface-variant flex items-center gap-2">
